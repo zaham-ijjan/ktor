@@ -27,111 +27,52 @@ private const val UNFLUSHED_LIMIT = 65536
 internal class NettyResponsePipeline constructor(
     private val dst: ChannelHandlerContext,
     initialEncapsulation: WriterEncapsulation,
-    private val requestQueue: NettyRequestQueue,
     override val coroutineContext: CoroutineContext
 ) : CoroutineScope {
-    private val readyQueueSize = requestQueue.readLimit
-    private val runningQueueSize = requestQueue.runningLimit
+    private var responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
+    private var needsFlush: Boolean = false
+    private var reading: Boolean = false
 
-    private val incoming: ReceiveChannel<NettyRequestQueue.CallElement> = requestQueue.elements
-    private val ready = ArrayDeque<NettyRequestQueue.CallElement>(readyQueueSize)
-    private val running = ArrayDeque<NettyRequestQueue.CallElement>(runningQueueSize)
+    fun startReading() {
+        reading = true
+    }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val responses = launch(
-        dst.executor().asCoroutineDispatcher() + ResponsePipelineCoroutineName,
-        start = CoroutineStart.UNDISPATCHED
-    ) {
-        try {
-            processJobs()
-        } catch (t: Throwable) {
-            if (t !is CancellationException) {
-                dst.fireExceptionCaught(t)
-            }
-
-            dst.close()
+    fun stopReading() {
+        reading = false
+        if (needsFlush) {
+            needsFlush = false
+            dst.flush()
         }
     }
 
     private var encapsulation: WriterEncapsulation = initialEncapsulation
 
-    fun ensureRunning() {
-        responses.start()
-    }
+    private suspend fun processResponse(call: NettyApplicationCall) {
+        // size is maximum -> exception
+        responseQueue.add(call)
 
-    private suspend fun processJobs() {
-        while (true) {
-            fill()
-            if (running.isEmpty()) break
-            processElement(running.removeFirst())
+        //is size true?
+        // cases when it's not (parallel exec?) or why we need return here
+        if(responseQueue.size > 1) {
+            return
         }
+
+        startResponseProcessing()
 
         if (encapsulation.requiresContextClose) {
             dst.close()
         }
     }
 
-    private suspend fun fill() {
-        tryFill()
-        if (running.isEmpty()) {
-            return fillSuspend()
+    private fun startResponseProcessing() {
+        // can we add to the queue while iterating?
+        while(true) {
+            val call = responseQueue.poll() ?: break
+            processElement(call)
         }
     }
 
-    private fun tryFill() {
-        while (isNotFull()) {
-            if (!pollReady()) {
-                tryStart()
-                dst.read()
-                break
-            }
-
-            tryStart()
-        }
-    }
-
-    private suspend fun fillSuspend() {
-        if (running.isEmpty()) {
-            @OptIn(ExperimentalCoroutinesApi::class)
-            val e = incoming.receiveCatching().getOrNull()
-
-            if (e != null && e.ensureRunning()) {
-                running.addLast(e)
-                tryFill()
-            }
-        }
-    }
-
-    private fun pollReady(): Boolean {
-        for (index in 1..(readyQueueSize - ready.size)) {
-            val e = incoming.tryReceive().getOrNull() ?: return false
-            ready.addLast(e)
-        }
-        return true
-    }
-
-    private fun tryStart() {
-        while (ready.isNotEmpty() && running.size < runningQueueSize) {
-            val e = ready.removeFirst()
-            if (e.ensureRunning()) {
-                running.addLast(e)
-            } else {
-                break
-            }
-        }
-    }
-
-    private fun isNotFull(): Boolean = ready.size < readyQueueSize || running.size < runningQueueSize
-
-    private fun hasNextResponseMessage(): Boolean {
-        tryFill()
-        return running.peekFirst()?.isCompleted == true
-    }
-
-    @Suppress("NOTHING_TO_INLINE")
-    private suspend inline fun processElement(element: NettyRequestQueue.CallElement) {
-        val call = element.call
-
+    private inline fun processElement(call: NettyApplicationCall) {
         try {
             processCall(call)
         } catch (actualException: Throwable) {
@@ -152,8 +93,6 @@ internal class NettyResponsePipeline constructor(
         call.responseWriteJob.cancel()
         call.response.cancel()
         call.dispose()
-        responses.cancel()
-        requestQueue.cancel()
     }
 
     private fun processUpgrade(responseMessage: Any): ChannelFuture {
@@ -164,45 +103,59 @@ internal class NettyResponsePipeline constructor(
         return future
     }
 
-    @Suppress("NOTHING_TO_INLINE")
-    private suspend inline fun finishCall(call: NettyApplicationCall, lastMessage: Any?, lastFuture: ChannelFuture) {
+    private fun finishCall(call: NettyApplicationCall, lastMessage: Any?, lastFuture: ChannelFuture) {
+        // what is isUpgradeResponse
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
-        val doNotFlush = hasNextResponseMessage() && !prepareForClose
 
-        val f: ChannelFuture? = when {
-            lastMessage == null && doNotFlush -> null
-            lastMessage == null -> {
-                dst.flush()
-                null
-            }
-            doNotFlush -> {
-                dst.write(lastMessage)
-                null
-            }
-            else -> dst.writeAndFlush(lastMessage)
+        val future = if(lastMessage != null) {
+            dst.write(lastMessage)
+        } else {
+            null
         }
 
-        f?.suspendWriteAwait()
+        future?.addListener {
+            if(prepareForClose) {
+                close(lastFuture)
+                return@addListener
+            }
+            if(responseQueue.isEmpty()) {
+                // what is the difference between addListener and executor().execute
+                scheduleFlush()
+            }
+        }
 
         if (prepareForClose) {
-            dst.flush()
-            lastFuture.suspendWriteAwait()
-            requestQueue.cancel()
+            close(lastFuture)
         }
     }
 
-    @Suppress("NOTHING_TO_INLINE")
-    private suspend inline fun processCall(call: NettyApplicationCall) {
-        val responseMessage = call.response.responseMessage.await()
+    fun close(lastFuture: ChannelFuture) {
+        dst.flush()
+        needsFlush = false
+        lastFuture.addListener {
+            dst.close()
+        }
+    }
+
+    private fun scheduleFlush() {
+        dst.executor().execute {
+            if (responseQueue.isEmpty() && needsFlush) {
+                needsFlush = false
+                dst.flush()
+            }
+        }
+    }
+
+    private fun processCall(call: NettyApplicationCall) {
+        val responseMessage = call.response.responseMessage
         val response = call.response
 
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(responseMessage)
         } else {
+            needsFlush = true
             dst.writeAndFlush(responseMessage)
         }
-
-        tryFill()
 
         if (responseMessage is FullHttpResponse) {
             return finishCall(call, null, requestMessageFuture)
@@ -218,11 +171,14 @@ internal class NettyResponsePipeline constructor(
             else -> -1
         }
 
-        when (knownSize) {
-            0 -> processEmpty(call, requestMessageFuture)
-            in 1..65536 -> processSmallContent(call, response, knownSize)
-            -1 -> processBodyFlusher(call, response, requestMessageFuture)
-            else -> processBodyGeneral(call, response, requestMessageFuture)
+        // what context?
+        CoroutineScope(NettyDispatcher + NettyDispatcher.CurrentContext(dst)).launch {
+            when (knownSize) {
+                0 -> processEmpty(call, requestMessageFuture)
+                in 1..65536 -> processSmallContent(call, response, knownSize)
+                -1 -> processBodyFlusher(call, response, requestMessageFuture)
+                else -> processBodyGeneral(call, response, requestMessageFuture)
+            }
         }
     }
 
@@ -234,7 +190,7 @@ internal class NettyResponsePipeline constructor(
         }
     }
 
-    private suspend fun processEmpty(call: NettyApplicationCall, lastFuture: ChannelFuture) {
+    private fun processEmpty(call: NettyApplicationCall, lastFuture: ChannelFuture) {
         return finishCall(call, encapsulation.endOfStream(false), lastFuture)
     }
 
@@ -285,7 +241,6 @@ internal class NettyResponsePipeline constructor(
                 val message = encapsulation.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT) {
-                    tryFill()
                     val future = dst.writeAndFlush(message)
                     lastFuture = future
                     future.suspendAwait()
@@ -332,7 +287,6 @@ internal class NettyResponsePipeline constructor(
                 val message = encapsulation.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0) {
-                    tryFill()
                     val future = dst.writeAndFlush(message)
                     lastFuture = future
                     future.suspendAwait()
