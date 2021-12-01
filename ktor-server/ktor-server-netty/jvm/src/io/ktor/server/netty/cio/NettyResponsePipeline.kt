@@ -15,8 +15,6 @@ import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.*
 import java.io.*
 import java.util.*
 import kotlin.coroutines.*
@@ -47,13 +45,13 @@ internal class NettyResponsePipeline constructor(
 
     private var encapsulation: WriterEncapsulation = initialEncapsulation
 
-    private suspend fun processResponse(call: NettyApplicationCall) {
+    public fun processResponse(call: NettyApplicationCall) {
         // size is maximum -> exception
         responseQueue.add(call)
 
         //is size true?
         // cases when it's not (parallel exec?) or why we need return here
-        if(responseQueue.size > 1) {
+        if (responseQueue.size > 1) {
             return
         }
 
@@ -66,7 +64,7 @@ internal class NettyResponsePipeline constructor(
 
     private fun startResponseProcessing() {
         // can we add to the queue while iterating?
-        while(true) {
+        while (true) {
             val call = responseQueue.poll() ?: break
             processElement(call)
         }
@@ -107,18 +105,18 @@ internal class NettyResponsePipeline constructor(
         // what is isUpgradeResponse
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
 
-        val future = if(lastMessage != null) {
+        val future = if (lastMessage != null) {
             dst.write(lastMessage)
         } else {
             null
         }
 
         future?.addListener {
-            if(prepareForClose) {
+            if (prepareForClose) {
                 close(lastFuture)
                 return@addListener
             }
-            if(responseQueue.isEmpty()) {
+            if (responseQueue.isEmpty()) {
                 // what is the difference between addListener and executor().execute
                 scheduleFlush()
             }
@@ -172,7 +170,7 @@ internal class NettyResponsePipeline constructor(
         }
 
         // what context?
-        CoroutineScope(NettyDispatcher + NettyDispatcher.CurrentContext(dst)).launch {
+        launch(NettyDispatcher.CurrentContext(dst)) {
             when (knownSize) {
                 0 -> processEmpty(call, requestMessageFuture)
                 in 1..65536 -> processSmallContent(call, response, knownSize)
