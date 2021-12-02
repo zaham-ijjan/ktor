@@ -22,7 +22,8 @@ public abstract class NettyApplicationResponse(
     protected val userContext: CoroutineContext
 ) : BaseApplicationResponse(call) {
 
-    public val responseMessage: CompletableDeferred<Any> = CompletableDeferred()
+    internal val responseFlag: ChannelPromise = context.newPromise()
+    public lateinit var responseMessage: Any
 
     @Volatile
     protected var responseMessageSent: Boolean = false
@@ -53,7 +54,8 @@ public abstract class NettyApplicationResponse(
                 is LastHttpContent -> ByteReadChannel.Empty
                 else -> ByteReadChannel(bytes)
             }
-            responseMessage.complete(message)
+            responseMessage = message
+            responseFlag.setSuccess()
             responseMessageSent = true
         }
     }
@@ -76,16 +78,15 @@ public abstract class NettyApplicationResponse(
         if (responseMessageSent) return
 
         responseChannel = content
-        responseMessage.complete(
-            when {
-                content.isClosedForRead -> {
-                    responseMessage(chunked = false, data = EmptyByteArray)
-                }
-                else -> {
-                    responseMessage(chunked, last = false)
-                }
+        responseMessage = when {
+            content.isClosedForRead -> {
+                responseMessage(chunked = false, data = EmptyByteArray)
             }
-        )
+            else -> {
+                responseMessage(chunked, last = false)
+            }
+        }
+        responseFlag.setSuccess()
         responseMessageSent = true
     }
 
@@ -108,7 +109,7 @@ public abstract class NettyApplicationResponse(
     public fun cancel() {
         if (!responseMessageSent) {
             responseChannel = ByteReadChannel.Empty
-            responseMessage.cancel()
+            responseFlag.setFailure(java.util.concurrent.CancellationException())
             responseMessageSent = true
         }
     }

@@ -45,7 +45,7 @@ internal class NettyResponsePipeline constructor(
 
     private var encapsulation: WriterEncapsulation = initialEncapsulation
 
-    public fun processResponse(call: NettyApplicationCall) {
+    fun processResponse(call: NettyApplicationCall) {
         // size is maximum -> exception
         responseQueue.add(call)
 
@@ -70,9 +70,11 @@ internal class NettyResponsePipeline constructor(
         }
     }
 
-    private inline fun processElement(call: NettyApplicationCall) {
+    private fun processElement(call: NettyApplicationCall) {
         try {
-            processCall(call)
+            call.response.responseFlag.addListener {
+                processCall(call)
+            }
         } catch (actualException: Throwable) {
             processCallFailed(call, actualException)
         } finally {
@@ -125,6 +127,10 @@ internal class NettyResponsePipeline constructor(
         if (prepareForClose) {
             close(lastFuture)
         }
+
+        if (responseQueue.isEmpty()) {
+            scheduleFlush()
+        }
     }
 
     fun close(lastFuture: ChannelFuture) {
@@ -152,7 +158,7 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(responseMessage)
         } else {
             needsFlush = true
-            dst.writeAndFlush(responseMessage)
+            dst.write(responseMessage)
         }
 
         if (responseMessage is FullHttpResponse) {
