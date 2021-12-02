@@ -10,7 +10,6 @@ import io.ktor.server.netty.http2.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
-import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
@@ -27,14 +26,16 @@ internal class NettyResponsePipeline constructor(
     override val coroutineContext: CoroutineContext
 ) : CoroutineScope {
     private var responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
+
     private var needsFlush: Boolean = false
+
     private var reading: Boolean = false
 
-    fun startReading() {
+    fun markReadingStarted() {
         reading = true
     }
 
-    fun stopReading() {
+    fun markReadingStopped() {
         reading = false
         if (needsFlush) {
             needsFlush = false
