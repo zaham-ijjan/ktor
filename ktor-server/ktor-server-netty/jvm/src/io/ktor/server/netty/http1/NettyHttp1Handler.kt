@@ -37,7 +37,7 @@ internal class NettyHttp1Handler(
 
     @OptIn(InternalAPI::class)
     override fun channelActive(ctx: ChannelHandlerContext) {
-        responseWriter = NettyResponsePipeline(ctx, WriterEncapsulation.Http1, coroutineContext)
+        responseWriter = NettyResponsePipeline(ctx, coroutineContext)
 
         ctx.pipeline().apply {
             addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
