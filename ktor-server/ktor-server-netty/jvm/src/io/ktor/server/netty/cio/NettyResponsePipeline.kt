@@ -201,7 +201,7 @@ internal class NettyResponsePipeline constructor(
 
         val future = dst.write(DefaultHttpContent(buffer))
 
-        val lastMessage = trailerMessage(response) ?:LastHttpContent.EMPTY_LAST_CONTENT
+        val lastMessage = trailerMessage(response) ?: LastHttpContent.EMPTY_LAST_CONTENT
         finishCall(call, lastMessage, future)
     }
 
