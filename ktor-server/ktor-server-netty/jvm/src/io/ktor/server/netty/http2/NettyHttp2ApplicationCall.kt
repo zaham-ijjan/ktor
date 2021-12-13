@@ -48,4 +48,6 @@ internal class NettyHttp2ApplicationCall(
         }
         throw IllegalStateException("HTTP/2 doesn't support upgrade")
     }
+
+    override fun isContextCloseRequired(): Boolean = false
 }
