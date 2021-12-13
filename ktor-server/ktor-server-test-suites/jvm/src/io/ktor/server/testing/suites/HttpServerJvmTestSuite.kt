@@ -33,7 +33,6 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
             get("/") {
                 val d = call.request.queryParameters["d"]!!.toLong()
                 delay(d.seconds.inWholeMilliseconds)
-
                 call.response.header("D", d.toString())
                 call.respondText("Response for $d\n")
             }
@@ -223,8 +222,10 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                                     val bb = ByteBuffer.allocate(8)
                                     input.readFully(bb)
                                     bb.flip()
+
                                     output.writeFully(bb)
                                     output.close()
+
                                     input.readRemaining().use {
                                         assertEquals(0, it.remaining)
                                     }
