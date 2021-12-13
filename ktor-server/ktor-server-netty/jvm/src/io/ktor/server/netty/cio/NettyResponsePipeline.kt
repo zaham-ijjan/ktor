@@ -97,7 +97,7 @@ internal class NettyResponsePipeline constructor(
         val future = context.write(responseMessage)
         encapsulation.upgrade(context)
         encapsulation = WriterEncapsulation.Raw
-        context.flush()
+        needsFlush = true
         return future
     }
 
@@ -158,6 +158,8 @@ internal class NettyResponsePipeline constructor(
             needsFlush = true
             context.write(responseMessage)
         }
+
+        context.read()
 
         if (responseMessage is FullHttpResponse) {
             return finishCall(call, null, requestMessageFuture)
@@ -270,7 +272,6 @@ internal class NettyResponsePipeline constructor(
             while (true) {
                 val buffer = request(0, 1)
                 if (buffer == null) {
-                    // stops here! Fix this
                     if (!awaitAtLeast(1)) break
                     continue
                 }
