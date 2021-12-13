@@ -122,7 +122,6 @@ internal class NettyHttp1Handler(
     }
 
     private fun handleContent(context: ChannelHandlerContext, message: HttpContent) {
-        // ???
         try {
             val contentBuffer = message.content()
             pipeBuffer(context, contentBuffer)
@@ -139,13 +138,16 @@ internal class NettyHttp1Handler(
         }
     }
 
-
     private fun pipeBuffer(context: ChannelHandlerContext, message: ByteBuf) {
-        if (message.readableBytes() == 0) return
+        val length = message.readableBytes()
+        if (length == 0) return
 
-        // Don't throw exception?
-        currentRequest!!.writeByteBuf(context, message)
+        //what to do with launch?
+        launch(context.executor().asCoroutineDispatcher()) {
+            val buffer = message.internalNioBuffer(message.readerIndex(), length)
+            currentRequest?.writeFully(buffer)
 
-        context.channel().config().isAutoRead = currentRequest!!.availableForWrite != 0
+            context.channel().config().isAutoRead = currentRequest!!.availableForWrite != 0
+        }
     }
 }
