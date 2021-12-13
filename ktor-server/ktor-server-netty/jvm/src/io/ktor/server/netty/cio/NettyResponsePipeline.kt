@@ -10,12 +10,12 @@ import io.ktor.server.netty.http2.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
-import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
 import java.io.*
+import java.nio.*
 import java.util.*
 import kotlin.coroutines.*
 
@@ -23,7 +23,7 @@ private const val UNFLUSHED_LIMIT = 65536
 
 @OptIn(InternalAPI::class)
 internal class NettyResponsePipeline constructor(
-    private val dst: ChannelHandlerContext,
+    private val context: ChannelHandlerContext,
     initialEncapsulation: WriterEncapsulation,
     override val coroutineContext: CoroutineContext
 ) : CoroutineScope {
@@ -43,7 +43,7 @@ internal class NettyResponsePipeline constructor(
         reading = false
         if (needsFlush) {
             needsFlush = false
-            dst.flush()
+            context.flush()
         }
     }
 
@@ -94,10 +94,10 @@ internal class NettyResponsePipeline constructor(
     }
 
     private fun processUpgrade(responseMessage: Any): ChannelFuture {
-        val future = dst.write(responseMessage)
-        encapsulation.upgrade(dst)
+        val future = context.write(responseMessage)
+        encapsulation.upgrade(context)
         encapsulation = WriterEncapsulation.Raw
-        dst.flush()
+        context.flush()
         return future
     }
 
@@ -106,7 +106,7 @@ internal class NettyResponsePipeline constructor(
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
 
         val future = if (lastMessage != null) {
-            dst.write(lastMessage)
+            context.write(lastMessage)
         } else {
             null
         }
@@ -132,18 +132,18 @@ internal class NettyResponsePipeline constructor(
     }
 
     fun close(lastFuture: ChannelFuture) {
-        dst.flush()
+        context.flush()
         needsFlush = false
         lastFuture.addListener {
-            dst.close()
+            context.close()
         }
     }
 
     private fun scheduleFlush() {
-        dst.executor().execute {
+        context.executor().execute {
             if (responseQueue.isEmpty() && needsFlush) {
                 needsFlush = false
-                dst.flush()
+                context.flush()
             }
         }
     }
@@ -156,7 +156,7 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(responseMessage)
         } else {
             needsFlush = true
-            dst.write(responseMessage)
+            context.write(responseMessage)
         }
 
         if (responseMessage is FullHttpResponse) {
@@ -174,7 +174,7 @@ internal class NettyResponsePipeline constructor(
         }
 
         // what context?
-        launch(NettyDispatcher.CurrentContext(dst)) {
+        launch(NettyDispatcher.CurrentContext(context)) {
             when (knownSize) {
                 0 -> processEmpty(call, requestMessageFuture)
                 in 1..65536 -> processSmallContent(call, response, knownSize)
@@ -197,14 +197,14 @@ internal class NettyResponsePipeline constructor(
     }
 
     private suspend fun processSmallContent(call: NettyApplicationCall, response: NettyApplicationResponse, size: Int) {
-        val buffer = dst.alloc().buffer(size)
+        val buffer = context.alloc().buffer(size)
         val channel = response.responseChannel
 
         val start = buffer.writerIndex()
         channel.readFully(buffer.nioBuffer(start, buffer.writableBytes()))
         buffer.writerIndex(start + size)
 
-        val future = dst.write(encapsulation.transform(buffer, true))
+        val future = context.write(encapsulation.transform(buffer, true))
 
         val lastMessage = trailerMessage(response) ?: encapsulation.endOfStream(true)
         finishCall(call, lastMessage, future)
@@ -230,7 +230,7 @@ internal class NettyResponsePipeline constructor(
                 }
 
                 val rc = buffer.remaining()
-                val buf = dst.alloc().buffer(rc)
+                val buf = context.alloc().buffer(rc)
                 val idx = buf.writerIndex()
                 buf.setBytes(idx, buffer)
                 buf.writerIndex(idx + rc)
@@ -241,12 +241,12 @@ internal class NettyResponsePipeline constructor(
                 val message = encapsulation.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT) {
-                    val future = dst.writeAndFlush(message)
+                    val future = context.writeAndFlush(message)
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0
                 } else {
-                    lastFuture = dst.write(message)
+                    lastFuture = context.write(message)
                 }
             }
         }
@@ -276,7 +276,7 @@ internal class NettyResponsePipeline constructor(
                 }
 
                 val rc = buffer.remaining()
-                val buf = dst.alloc().buffer(rc)
+                val buf = context.alloc().buffer(rc)
                 val idx = buf.writerIndex()
                 buf.setBytes(idx, buffer)
                 buf.writerIndex(idx + rc)
@@ -287,12 +287,12 @@ internal class NettyResponsePipeline constructor(
                 val message = encapsulation.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0) {
-                    val future = dst.writeAndFlush(message)
+                    val future = context.writeAndFlush(message)
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0
                 } else {
-                    lastFuture = dst.write(message)
+                    lastFuture = context.write(message)
                 }
             }
         }
