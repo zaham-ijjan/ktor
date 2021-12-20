@@ -122,13 +122,18 @@ internal class NettyHttp1Handler(
     }
 
     private fun handleContent(context: ChannelHandlerContext, message: HttpContent) {
+        // ???
         try {
             val contentBuffer = message.content()
             pipeBuffer(context, contentBuffer)
 
+            // upgraded??
             if (message is LastHttpContent) {
                 currentRequest?.close()
+                currentRequest = null
             }
+
+            context.fireChannelRead(message)
         } finally {
             message.release()
         }
