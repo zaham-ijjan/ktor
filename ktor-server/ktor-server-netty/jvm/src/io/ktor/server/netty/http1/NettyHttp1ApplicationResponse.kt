@@ -74,7 +74,38 @@ internal class NettyHttp1ApplicationResponse constructor(
     }
 
     override suspend fun respondUpgrade(upgrade: OutgoingContent.ProtocolUpgrade) {
-        TODO()
+        val nettyContext = context
+        val nettyChannel = nettyContext.channel()
+        val userAppContext = userContext + NettyDispatcher.CurrentContext(nettyContext)
+
+        val upgradedReadChannel = ByteChannel()
+        val upgradedWriteChannel = ByteChannel()
+
+        sendResponse(chunked = false, content = upgradedWriteChannel)
+
+        with(nettyChannel.pipeline()) {
+            if (get(NettyHttp1Handler::class.java) != null) {
+                remove(NettyHttp1Handler::class.java)
+                addFirst(NettyDirectDecoder())
+            } else {
+                cancel()
+                val cause = CancellationException("HTTP upgrade has been cancelled")
+                upgradedWriteChannel.cancel(cause)
+                throw cause
+            }
+        }
+
+        val job = upgrade.upgrade(upgradedReadChannel, upgradedWriteChannel, engineContext, userAppContext)
+
+        job.invokeOnCompletion {
+            upgradedWriteChannel.close()
+            upgradedReadChannel.cancel()
+        }
+
+        (call as NettyApplicationCall).responseWriteJob.join()
+        job.join()
+
+        context.channel().close()
     }
 
     private fun setChunked(message: HttpResponse) {

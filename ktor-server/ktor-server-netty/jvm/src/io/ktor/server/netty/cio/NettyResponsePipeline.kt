@@ -265,6 +265,7 @@ internal class NettyResponsePipeline constructor(
             while (true) {
                 val buffer = request(0, 1)
                 if (buffer == null) {
+                    // stops here! Fix this
                     if (!awaitAtLeast(1)) break
                     continue
                 }
