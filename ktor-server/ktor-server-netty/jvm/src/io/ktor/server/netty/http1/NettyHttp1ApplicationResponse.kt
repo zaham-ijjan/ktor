@@ -74,33 +74,47 @@ internal class NettyHttp1ApplicationResponse constructor(
     }
 
     override suspend fun respondUpgrade(upgrade: OutgoingContent.ProtocolUpgrade) {
+        println("RESPONSE UPGRADE")
         val nettyContext = context
         val nettyChannel = nettyContext.channel()
         val userAppContext = userContext + NettyDispatcher.CurrentContext(nettyContext)
 
+        println("RESPONSE UPGRADE - 1")
         val bodyHandler = nettyContext.pipeline().get(RequestBodyHandler::class.java)
+        println("RESPONSE UPGRADE - 11")
         val upgradedReadChannel = bodyHandler.upgrade()
 
+        println("RESPONSE UPGRADE - 2")
         val upgradedWriteChannel = ByteChannel()
 
+        println("RESPONSE UPGRADE - 3")
         sendResponse(chunked = false, content = upgradedWriteChannel)
+        println("RESPONSE UPGRADE - 4")
 
         with(nettyChannel.pipeline()) {
             if (get(NettyHttp1Handler::class.java) != null) {
+                println("RESPONSE UPGRADE - 5")
                 remove(NettyHttp1Handler::class.java)
                 addFirst(NettyDirectDecoder())
+                println("RESPONSE UPGRADE - 6")
             } else {
+                println("RESPONSE UPGRADE - 7")
                 cancel()
+                println("RESPONSE UPGRADE - 8")
                 val cause = CancellationException("HTTP upgrade has been cancelled")
                 upgradedWriteChannel.cancel(cause)
+                println("RESPONSE UPGRADE - 9")
                 throw cause
             }
         }
 
+        println("RESPONSE UPGRADE - START JOB")
         val job = upgrade.upgrade(upgradedReadChannel, upgradedWriteChannel, engineContext, userAppContext)
 
         job.invokeOnCompletion {
+            println("RESPONSE UPGRADE - CLOSE JOB")
             upgradedWriteChannel.close()
+            bodyHandler.close()
             upgradedReadChannel.cancel()
         }
 
@@ -108,6 +122,7 @@ internal class NettyHttp1ApplicationResponse constructor(
         job.join()
 
         context.channel().close()
+        println("END RESPONSE UPGRADE")
     }
 
     private fun setChunked(message: HttpResponse) {

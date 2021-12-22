@@ -50,6 +50,9 @@ internal class RequestBodyHandler(
                     val channel = current ?: throw IllegalStateException("No current channel but received a byte buf")
                     processContent(channel, event)
                 } else if (event is ByteWriteChannel) {
+                    if(upgraded) {
+                        println("Offer new channel")
+                    }
                     current?.close()
                     current = event
                 } else if (event is Upgrade) {
@@ -68,8 +71,22 @@ internal class RequestBodyHandler(
     }
 
     fun upgrade(): ByteReadChannel {
-        tryOfferChannelOrToken(Upgrade)
-        return newChannel()
+        println("Response body upgrade - 1")
+
+        val result = queue.trySend(Upgrade)
+        println("Response body upgrade - 2")
+        if (result.isSuccess) return newChannel()
+
+        println("Response body upgrade - 3")
+        if (queue.isClosedForSend) {
+            throw CancellationException("HTTP pipeline has been terminated.", result.exceptionOrNull())
+        }
+        println("Response body upgrade - 4")
+        throw IllegalStateException(
+            "Unable to start request processing: failed to offer " +
+                "$Upgrade to the HTTP pipeline queue. " +
+                "Queue closed: ${queue.isClosedForSend}"
+        )
     }
 
     fun newChannel(): ByteReadChannel {

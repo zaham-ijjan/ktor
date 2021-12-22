@@ -57,15 +57,13 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        responseWriter.markReadingStarted()
-
-        when (message) {
-            is HttpRequest -> handleRequest(context, message)
-//            is HttpContent -> handleContent(context, message)
-//            is ByteBuf -> pipeBuffer(context, message)
-            else -> {
-                context.fireChannelRead(message)
-            }
+        if (message is HttpRequest) {
+            handleRequest(context, message)
+        } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
+            skipEmpty = false
+            message.release()
+        } else {
+            context.fireChannelRead(message)
         }
     }
 
