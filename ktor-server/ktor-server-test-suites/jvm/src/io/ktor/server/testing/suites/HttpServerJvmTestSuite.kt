@@ -220,16 +220,27 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                         ): Job {
                             return launch(engineContext) {
                                 try {
+                                    println("START TEST UPGRADE")
                                     val bb = ByteBuffer.allocate(8)
+                                    println("TEST UPGRADE - 1")
+                                    // here
                                     input.readFully(bb)
+                                    println("TEST UPGRADE - 2")
                                     bb.flip()
+
+                                    println("TEST UPGRADE - START WRITE OUT")
                                     output.writeFully(bb)
+                                    println("TEST UPGRADE - PREPARE CLOSE")
                                     output.close()
+
+                                    println("TEST UPGRADE - CLOSED")
                                     input.readRemaining().use {
                                         assertEquals(0, it.remaining)
                                     }
                                     completed.complete(Unit)
+                                    println("END TEST UPGRADE")
                                 } catch (t: Throwable) {
+                                    println("TEST UPGRADE - EXCEPTION")
                                     completed.completeExceptionally(t)
                                     throw t
                                 }
@@ -260,19 +271,27 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                     val s = inputStream
                     val bytes = ByteArray(512)
                     try {
+                        println("START TEST SOCKET READING")
                         while (true) {
                             if (s.available() > 0) {
                                 val rc = s.read(bytes)
+                                println("TEST SOCKET READING - 1")
                                 ch.writeFully(bytes, 0, rc)
+                                println("TEST SOCKET READING - 2")
                             } else {
                                 yield()
+                                println("TEST SOCKET READING - 3")
                                 val rc = s.read(bytes)
+                                println("TEST SOCKET READING - 4")
                                 if (rc == -1) break
+                                println("TEST SOCKET READING - 5")
                                 ch.writeFully(bytes, 0, rc)
+                                println("TEST SOCKET READING - 6")
                             }
 
                             yield()
                         }
+                        println("END TEST SOCKET READING")
                     } catch (t: Throwable) {
                         ch.close(t)
                     } finally {
@@ -280,7 +299,9 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                     }
                 }
 
+                println("TEST TRY TO GET RESPONSE")
                 val response = parseResponse(ch)!!
+                println("TEST GOT RESPONSE")
 
                 assertEquals(HttpStatusCode.SwitchingProtocols.value, response.status)
                 assertEquals("Upgrade", response.headers[HttpHeaders.Connection]?.toString())

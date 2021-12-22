@@ -176,7 +176,7 @@ internal class NettyResponsePipeline constructor(
         }
 
         // what context?
-        launch(NettyDispatcher.CurrentContext(context)) {
+        launch(context.executor().asCoroutineDispatcher()) {
             when (knownSize) {
                 0 -> processEmpty(call, requestMessageFuture)
                 in 1..65536 -> processSmallContent(call, response, knownSize)
