@@ -11,7 +11,6 @@ import io.ktor.server.netty.cio.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
-import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.core.internal.*
 import io.netty.buffer.*
 import io.netty.channel.*
@@ -20,8 +19,7 @@ import io.netty.util.concurrent.*
 import kotlinx.coroutines.*
 import java.io.*
 import java.nio.channels.*
-import java.util.ArrayDeque
-import java.util.Queue
+import java.util.*
 import kotlin.coroutines.*
 
 internal class NettyHttp1Handler(
