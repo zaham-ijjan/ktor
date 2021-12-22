@@ -71,17 +71,12 @@ internal class RequestBodyHandler(
     }
 
     fun upgrade(): ByteReadChannel {
-        println("Response body upgrade - 1")
-
         val result = queue.trySend(Upgrade)
-        println("Response body upgrade - 2")
         if (result.isSuccess) return newChannel()
 
-        println("Response body upgrade - 3")
         if (queue.isClosedForSend) {
             throw CancellationException("HTTP pipeline has been terminated.", result.exceptionOrNull())
         }
-        println("Response body upgrade - 4")
         throw IllegalStateException(
             "Unable to start request processing: failed to offer " +
                 "$Upgrade to the HTTP pipeline queue. " +
@@ -141,7 +136,7 @@ internal class RequestBodyHandler(
             buf.release()
         }
     }
-// why we should read
+
     private fun requestMoreEvents() {
         if (requestQueue.isEmpty()) {
             context.read()

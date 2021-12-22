@@ -47,20 +47,12 @@ internal class NettyResponsePipeline constructor(
     }
 
     fun processResponse(call: NettyApplicationCall) {
-        // size is maximum -> exception
         responseQueue.add(call)
-
-        //is size true?
-        // cases when it's not (parallel exec?) or why we need return here
-        if (responseQueue.size > 1) {
-            return
-        }
-
+        if (responseQueue.size > 1) return
         startResponseProcessing()
     }
 
     private fun startResponseProcessing() {
-        // can we add to the queue while iterating?
         while (true) {
             context.read()
             val call = responseQueue.poll() ?: break
@@ -97,12 +89,13 @@ internal class NettyResponsePipeline constructor(
         val future = context.write(responseMessage)
         encapsulation.upgrade(context)
         encapsulation = WriterEncapsulation.Raw
-        needsFlush = true
+
+        context.flush()
+        needsFlush = false
         return future
     }
 
     private fun finishCall(call: NettyApplicationCall, lastMessage: Any?, lastFuture: ChannelFuture) {
-        // what is isUpgradeResponse
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
 
         val future = if (lastMessage != null) {
@@ -117,7 +110,6 @@ internal class NettyResponsePipeline constructor(
                 return@addListener
             }
             if (responseQueue.isEmpty()) {
-                // what is the difference between addListener and executor().execute
                 scheduleFlush()
             }
         }

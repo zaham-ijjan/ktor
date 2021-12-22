@@ -52,7 +52,6 @@ internal class NettyHttp1Handler(
             addLast(requestBodyHandler)
             addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
         }
-        //what is the diff super. and ctx.fire...
         context.fireChannelActive()
     }
 
@@ -133,17 +132,4 @@ internal class NettyHttp1Handler(
             }
         }
     }
-
-//    private fun pipeBuffer(context: ChannelHandlerContext, message: ByteBuf) {
-//        val length = message.readableBytes()
-//        if (length == 0) return
-//
-//        //what to do with launch?
-//        launch(context.executor().asCoroutineDispatcher()) {
-//            val buffer = message.internalNioBuffer(message.readerIndex(), length)
-//            currentRequest?.writeFully(buffer)
-//
-//            context.channel().config().isAutoRead = currentRequest!!.availableForWrite != 0
-//        }
-//    }
 }
