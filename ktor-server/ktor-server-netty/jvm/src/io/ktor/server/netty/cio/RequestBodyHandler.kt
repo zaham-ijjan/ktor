@@ -50,9 +50,6 @@ internal class RequestBodyHandler(
                     val channel = current ?: throw IllegalStateException("No current channel but received a byte buf")
                     processContent(channel, event)
                 } else if (event is ByteWriteChannel) {
-                    if(upgraded) {
-                        println("Offer new channel")
-                    }
                     current?.close()
                     current = event
                 } else if (event is Upgrade) {
