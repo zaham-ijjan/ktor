@@ -160,7 +160,7 @@ internal class NettyResponsePipeline constructor(
         }
 
         val responseChannel = response.responseChannel
-        val knownSize = when {
+        val bodySize = when {
             responseChannel === ByteReadChannel.Empty -> 0
             responseMessage is HttpResponse -> responseMessage.headers().getInt("Content-Length", -1)
             responseMessage is Http2HeadersFrame -> responseMessage.headers().getInt("content-length", -1)
@@ -169,12 +169,30 @@ internal class NettyResponsePipeline constructor(
 
         // what context?
         launch(context.executor().asCoroutineDispatcher()) {
-            when (knownSize) {
+            processResponseBody(
+                call,
+                response,
+                bodySize,
+                requestMessageFuture
+            )
+        }
+    }
+
+    private suspend fun processResponseBody(
+        call: NettyApplicationCall,
+        response: NettyApplicationResponse,
+        bodySize: Int,
+        requestMessageFuture: ChannelFuture
+    ) {
+        try {
+            when (bodySize) {
                 0 -> processEmpty(call, requestMessageFuture)
-                in 1..65536 -> processSmallContent(call, response, knownSize)
+                in 1..65536 -> processSmallContent(call, response, bodySize)
                 -1 -> processBodyFlusher(call, response, requestMessageFuture)
                 else -> processBodyGeneral(call, response, requestMessageFuture)
             }
+        } catch (actualException: Throwable) {
+            processCallFailed(call, actualException)
         }
     }
 
