@@ -30,16 +30,9 @@ internal class NettyResponsePipeline constructor(
 
     private var needsFlush: Boolean = false
 
-    private var reading: Boolean = false
-
     private var encapsulation: WriterEncapsulation = initialEncapsulation
 
-    fun markReadingStarted() {
-        reading = true
-    }
-
     fun markReadingStopped() {
-        reading = false
         if (needsFlush) {
             needsFlush = false
             context.flush()
