@@ -20,6 +20,7 @@ import kotlinx.coroutines.*
 import java.io.*
 import java.nio.channels.*
 import java.util.*
+import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 
 internal class NettyHttp1Handler(
@@ -35,6 +36,8 @@ internal class NettyHttp1Handler(
 
     private var skipEmpty = false
 
+    private val isReadComplete = AtomicBoolean(false)
+
     lateinit var responseWriter: NettyResponsePipeline
 
     private var currentRequest: ByteReadChannel? = null
@@ -44,7 +47,7 @@ internal class NettyHttp1Handler(
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
         val requestBodyHandler = RequestBodyHandler(context, responseQueue)
-        responseWriter = NettyResponsePipeline(context, WriterEncapsulation.Http1, coroutineContext, responseQueue)
+        responseWriter = NettyResponsePipeline(context, WriterEncapsulation.Http1, coroutineContext, responseQueue, isReadComplete)
 
         context.pipeline().apply {
             addLast(requestBodyHandler)
@@ -81,6 +84,7 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
+        isReadComplete.set(true)
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }
