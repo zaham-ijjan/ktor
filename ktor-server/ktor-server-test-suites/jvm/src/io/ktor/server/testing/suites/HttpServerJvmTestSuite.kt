@@ -29,8 +29,10 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
 
     @Test
     fun testRequestTwiceInOneBufferWithKeepAlive() {
+        println("TEST TEST")
         createAndStartServer {
             get("/") {
+                println("make get")
                 val d = call.request.queryParameters["d"]!!.toLong()
                 delay(d.seconds.inWholeMilliseconds)
 

@@ -95,6 +95,8 @@ internal class NettyResponsePipeline constructor(
         lastMessage: Any?,
         lastFuture: ChannelFuture
     ) {
+        println("finish call, qs = ${responseQueue.size}, isStopped = ${isReadComplete.get()}")
+
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
 
         val future = if (lastMessage != null) {
@@ -123,6 +125,7 @@ internal class NettyResponsePipeline constructor(
         context.flush()
         needsFlush.set(false)
         lastFuture.addListener {
+            println("make close, qs = ${responseQueue.size} isStopped = ${isReadComplete.get()}")
             context.close()
         }
     }
@@ -137,6 +140,8 @@ internal class NettyResponsePipeline constructor(
     }
 
     private fun processCall(call: NettyApplicationCall) {
+        println("process call")
+
         val responseMessage = call.response.responseMessage
         val response = call.response
 
