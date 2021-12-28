@@ -47,7 +47,13 @@ internal class NettyHttp1Handler(
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
         val requestBodyHandler = RequestBodyHandler(context, responseQueue)
-        responseWriter = NettyResponsePipeline(context, WriterEncapsulation.Http1, coroutineContext, responseQueue, isReadComplete)
+        responseWriter = NettyResponsePipeline(
+            context,
+            WriterEncapsulation.Http1,
+            coroutineContext,
+            responseQueue,
+            isReadComplete
+        )
 
         context.pipeline().apply {
             addLast(requestBodyHandler)

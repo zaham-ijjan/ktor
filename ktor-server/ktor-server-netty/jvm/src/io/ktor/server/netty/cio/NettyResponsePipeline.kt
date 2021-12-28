@@ -27,12 +27,18 @@ internal class NettyResponsePipeline constructor(
     initialEncapsulation: WriterEncapsulation,
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
-    private val isReadComplete: AtomicBoolean
+    private val isReadComplete: AtomicBoolean,
 ) : CoroutineScope {
 
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
     private var encapsulation: WriterEncapsulation = initialEncapsulation
+
+    private var processingStarted: Boolean = false
+
+    private var prevCall: ChannelPromise = context.newPromise().also {
+        it.setSuccess()
+    }
 
     fun markReadingStopped() {
         if (needsFlush.get()) {
@@ -43,22 +49,30 @@ internal class NettyResponsePipeline constructor(
 
     fun processResponse(call: NettyApplicationCall) {
         responseQueue.add(call)
-        if (responseQueue.size > 1) return
+        if (processingStarted) return
+        processingStarted = true
         startResponseProcessing()
     }
 
     private fun startResponseProcessing() {
         while (true) {
-            context.read()
             val call = responseQueue.poll() ?: break
+
+            call.previousCallFinished = prevCall
+            call.callFinished = context.newPromise()
+            prevCall = call.callFinished
+
             processElement(call)
         }
+        processingStarted = false
     }
 
     private fun processElement(call: NettyApplicationCall) {
         try {
             call.response.responseFlag.addListener {
-                processCall(call)
+                call.previousCallFinished.addListener {
+                    processCall(call)
+                }
             }
         } catch (actualException: Throwable) {
             processCallFailed(call, actualException)
@@ -78,6 +92,7 @@ internal class NettyResponsePipeline constructor(
         call.responseWriteJob.cancel()
         call.response.cancel()
         call.dispose()
+        call.callFinished.setFailure(t)
     }
 
     private fun processUpgrade(responseMessage: Any): ChannelFuture {
@@ -95,8 +110,6 @@ internal class NettyResponsePipeline constructor(
         lastMessage: Any?,
         lastFuture: ChannelFuture
     ) {
-        println("finish call, qs = ${responseQueue.size}, isStopped = ${isReadComplete.get()}")
-
         val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
 
         val future = if (lastMessage != null) {
@@ -105,28 +118,32 @@ internal class NettyResponsePipeline constructor(
             null
         }
 
-        val finalLambda: () -> Unit = finalLambda@{
+        val finishLambda = finishLambda@{
             if (prepareForClose) {
-                close(lastFuture)
-                return@finalLambda
+                close(call, lastFuture)
+                return@finishLambda
             }
             if (responseQueue.isEmpty()) {
                 scheduleFlush()
             }
         }
-        // why is it important to make twice?
+
         future?.addListener {
-            finalLambda()
+            finishLambda()
         }
-        finalLambda()
+        finishLambda()
+
+        if (!prepareForClose) {
+            call.callFinished.setSuccess()
+        }
     }
 
-    fun close(lastFuture: ChannelFuture) {
+    fun close(call: NettyApplicationCall, lastFuture: ChannelFuture) {
         context.flush()
         needsFlush.set(false)
         lastFuture.addListener {
-            println("make close, qs = ${responseQueue.size} isStopped = ${isReadComplete.get()}")
             context.close()
+            call.callFinished.setSuccess()
         }
     }
 
@@ -140,8 +157,6 @@ internal class NettyResponsePipeline constructor(
     }
 
     private fun processCall(call: NettyApplicationCall) {
-        println("process call")
-
         val responseMessage = call.response.responseMessage
         val response = call.response
 
@@ -169,7 +184,7 @@ internal class NettyResponsePipeline constructor(
             responseMessage is Http2HeadersFrame -> responseMessage.headers().getInt("content-length", -1)
             else -> -1
         }
-        
+
         launch(context.executor().asCoroutineDispatcher()) {
             processResponseBody(
                 call,
