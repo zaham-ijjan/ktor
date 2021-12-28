@@ -15,13 +15,17 @@ import kotlinx.coroutines.*
 public abstract class NettyApplicationCall(
     application: Application,
     public val context: ChannelHandlerContext,
-    private val requestMessage: Any
+    private val requestMessage: Any,
 ) : BaseApplicationCall(application) {
 
     @OptIn(InternalAPI::class)
     public abstract override val request: NettyApplicationRequest
     @OptIn(InternalAPI::class)
     public abstract override val response: NettyApplicationResponse
+    @OptIn(InternalAPI::class)
+    public lateinit var previousCallFinished: ChannelPromise
+    @OptIn(InternalAPI::class)
+    public lateinit var callFinished: ChannelPromise
 
     public val responseWriteJob: Job = Job()
 
