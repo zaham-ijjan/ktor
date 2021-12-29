@@ -23,7 +23,6 @@ public abstract class NettyApplicationResponse(
 ) : BaseApplicationResponse(call) {
 
     internal val responseFlag: ChannelPromise = context.newPromise()
-
     public lateinit var responseMessage: Any
 
     @Volatile

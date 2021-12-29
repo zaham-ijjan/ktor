@@ -5,6 +5,8 @@
 package io.ktor.server.netty
 
 import io.ktor.util.cio.*
+import io.ktor.utils.io.*
+import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.util.concurrent.*
 import io.netty.util.concurrent.Future
@@ -100,3 +102,17 @@ private class CoroutineListener<T, F : Future<T>>(
 
 private tailrec fun Throwable.unwrap(): Throwable =
     if (this is ExecutionException && cause != null) cause!!.unwrap() else this
+
+internal fun ByteWriteChannel.writeByteBuf(context: ChannelHandlerContext, buffer: ByteBuf) {
+    val length = buffer.readableBytes()
+    if (length == 0) return
+
+    val bytes = buffer.internalNioBuffer(buffer.readerIndex(), length)
+
+    // what to do?
+    runBlocking {
+        launch(NettyDispatcher.CurrentContext(context)) {
+            writeFully(bytes)
+        }
+    }
+}
