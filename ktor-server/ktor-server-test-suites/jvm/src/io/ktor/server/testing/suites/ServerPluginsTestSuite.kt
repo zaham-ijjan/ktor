@@ -63,28 +63,28 @@ abstract class ServerPluginsTestSuite<TEngine : ApplicationEngine, TConfiguratio
             sendEvent("onCall")
 
             call.afterFinish {
-                sendEvent("afterFinish")
+                sendEvent("afterFinish onCall")
             }
         }
         onCallReceive { call ->
             sendEvent("onCallReceive")
 
             call.afterFinish {
-                sendEvent("afterFinish")
+                sendEvent("afterFinish onCallReceive")
             }
         }
         onCallRespond { call, _ ->
             sendEvent("onCallRespond")
 
             call.afterFinish {
-                sendEvent("afterFinish")
+                sendEvent("afterFinishon CallRespond")
             }
         }
         onCallRespond.afterTransform { call, _ ->
             sendEvent("onCallRespond.afterTransform")
 
             call.afterFinish {
-                sendEvent("afterFinish")
+                sendEvent("afterFinish onCallRespond.afterTransform")
             }
         }
     }

@@ -29,21 +29,21 @@ internal class NettyHttp2ApplicationCall(
     }
 
     override fun transform(buf: ByteBuf, last: Boolean): Any {
-        if (isRaw) {
+        if(isRaw) {
             return super.transform(buf, last)
         }
         return DefaultHttp2DataFrame(buf, last)
     }
 
     override fun endOfStream(lastTransformed: Boolean): Any? {
-        if (isRaw) {
+        if(isRaw) {
             return super.endOfStream(lastTransformed)
         }
         return if (lastTransformed) null else DefaultHttp2DataFrame(true)
     }
 
     override fun upgrade(dst: ChannelHandlerContext) {
-        if (isRaw) {
+        if(isRaw) {
             return super.upgrade(dst)
         }
         throw IllegalStateException("HTTP/2 doesn't support upgrade")
