@@ -7,6 +7,7 @@ package io.ktor.server.netty
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.util.*
+import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.util.*
 import kotlinx.atomicfu.*
@@ -30,6 +31,20 @@ public abstract class NettyApplicationCall(
     public val responseWriteJob: Job = Job()
 
     private val messageReleased = atomic(false)
+
+    internal var isRaw = false
+
+    internal open fun transform(buf: ByteBuf, last: Boolean): Any {
+        return buf
+    }
+
+    internal open fun endOfStream(lastTransformed: Boolean): Any? {
+        return null
+    }
+
+    internal open fun upgrade(dst: ChannelHandlerContext) {
+        throw IllegalStateException("Already upgraded")
+    }
 
     override fun afterFinish(handler: (Throwable?) -> Unit) {
         responseWriteJob.invokeOnCompletion(handler)

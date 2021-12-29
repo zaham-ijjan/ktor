@@ -10,6 +10,7 @@ import io.ktor.http.content.*
 import io.ktor.server.engine.*
 import io.ktor.util.*
 import io.ktor.utils.io.*
+import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import kotlinx.coroutines.*
@@ -74,6 +75,10 @@ public abstract class NettyApplicationResponse(
 
     protected abstract fun responseMessage(chunked: Boolean, last: Boolean): Any
     protected open fun responseMessage(chunked: Boolean, data: ByteArray): Any = responseMessage(chunked, true)
+
+    internal open fun trailerMessage(): Any? {
+        return null
+    }
 
     internal fun sendResponse(chunked: Boolean = true, content: ByteReadChannel) {
         if (responseMessageSent) return

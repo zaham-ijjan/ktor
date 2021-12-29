@@ -49,7 +49,6 @@ internal class NettyHttp1Handler(
         val requestBodyHandler = RequestBodyHandler(context, responseQueue)
         responseWriter = NettyResponsePipeline(
             context,
-            WriterEncapsulation.Http1,
             coroutineContext,
             responseQueue,
             isReadComplete

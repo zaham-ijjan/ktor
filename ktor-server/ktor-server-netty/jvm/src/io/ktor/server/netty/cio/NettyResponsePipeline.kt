@@ -24,15 +24,11 @@ private const val UNFLUSHED_LIMIT = 65536
 @OptIn(InternalAPI::class)
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
-    initialEncapsulation: WriterEncapsulation,
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
     private val isReadComplete: AtomicBoolean,
 ) : CoroutineScope {
-
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
-
-    private var encapsulation: WriterEncapsulation = initialEncapsulation
 
     private var processingStarted: Boolean = false
 
@@ -95,10 +91,10 @@ internal class NettyResponsePipeline constructor(
         call.callFinished.setFailure(t)
     }
 
-    private fun processUpgrade(responseMessage: Any): ChannelFuture {
+    private fun processUpgrade(call: NettyApplicationCall, responseMessage: Any): ChannelFuture {
         val future = context.write(responseMessage)
-        encapsulation.upgrade(context)
-        encapsulation = WriterEncapsulation.Raw
+        call.upgrade(context)
+        call.isRaw = true
 
         context.flush()
         needsFlush.set(false)
@@ -161,7 +157,7 @@ internal class NettyResponsePipeline constructor(
         val response = call.response
 
         val requestMessageFuture = if (response.isUpgradeResponse()) {
-            processUpgrade(responseMessage)
+            processUpgrade(call, responseMessage)
         } else {
             needsFlush.set(true)
             if (isReadComplete.get()) {
@@ -213,16 +209,8 @@ internal class NettyResponsePipeline constructor(
         }
     }
 
-    private fun trailerMessage(response: NettyApplicationResponse): Any? {
-        return if (response is NettyHttp2ApplicationResponse) {
-            response.trailerMessage()
-        } else {
-            null
-        }
-    }
-
     private fun processEmpty(call: NettyApplicationCall, lastFuture: ChannelFuture) {
-        return finishCall(call, encapsulation.endOfStream(false), lastFuture)
+        return finishCall(call, call.endOfStream(false), lastFuture)
     }
 
     private suspend fun processSmallContent(call: NettyApplicationCall, response: NettyApplicationResponse, size: Int) {
@@ -233,8 +221,8 @@ internal class NettyResponsePipeline constructor(
         channel.readFully(buffer.nioBuffer(start, buffer.writableBytes()))
         buffer.writerIndex(start + size)
 
-        val future = context.write(encapsulation.transform(buffer, true))
-        val lastMessage = trailerMessage(response) ?: encapsulation.endOfStream(true)
+        val future = context.write(call.transform(buffer, true))
+        val lastMessage = response.trailerMessage() ?: call.endOfStream(true)
 
         finishCall(call, lastMessage, future)
     }
@@ -267,7 +255,7 @@ internal class NettyResponsePipeline constructor(
                 consumed(rc)
                 unflushedBytes += rc
 
-                val message = encapsulation.transform(buf, false)
+                val message = call.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT) {
                     context.read()
@@ -281,7 +269,7 @@ internal class NettyResponsePipeline constructor(
             }
         }
 
-        val lastMessage = trailerMessage(response) ?: encapsulation.endOfStream(false)
+        val lastMessage = response.trailerMessage() ?: call.endOfStream(false)
         finishCall(call, lastMessage, lastFuture)
     }
 
@@ -314,7 +302,7 @@ internal class NettyResponsePipeline constructor(
                 consumed(rc)
                 unflushedBytes += rc
 
-                val message = encapsulation.transform(buf, false)
+                val message = call.transform(buf, false)
 
                 if (unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0) {
                     context.read()
@@ -328,7 +316,7 @@ internal class NettyResponsePipeline constructor(
             }
         }
 
-        val lastMessage = trailerMessage(response) ?: encapsulation.endOfStream(false)
+        val lastMessage = response.trailerMessage() ?: call.endOfStream(false)
         finishCall(call, lastMessage, lastFuture)
     }
 }

@@ -8,6 +8,7 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.utils.io.*
+import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import kotlin.coroutines.*
@@ -39,5 +40,28 @@ internal class NettyHttp1ApplicationCall(
 
     init {
         putResponseAttribute()
+    }
+
+    override fun transform(buf: ByteBuf, last: Boolean): Any {
+        if(isRaw) {
+            return super.transform(buf, last)
+        }
+        return DefaultHttpContent(buf)
+    }
+
+    override fun endOfStream(lastTransformed: Boolean): Any? {
+        if(isRaw) {
+            return super.endOfStream(lastTransformed)
+        }
+        return LastHttpContent.EMPTY_LAST_CONTENT
+    }
+
+    override fun upgrade(dst: ChannelHandlerContext) {
+        if(isRaw) {
+            return super.upgrade(dst)
+        }
+        dst.pipeline().apply {
+            replace(HttpServerCodec::class.java, "direct-encoder", NettyDirectEncoder())
+        }
     }
 }
