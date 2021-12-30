@@ -43,21 +43,21 @@ internal class NettyHttp1ApplicationCall(
     }
 
     override fun transform(buf: ByteBuf, last: Boolean): Any {
-        if(isRaw) {
+        if (isRaw) {
             return super.transform(buf, last)
         }
         return DefaultHttpContent(buf)
     }
 
     override fun endOfStream(lastTransformed: Boolean): Any? {
-        if(isRaw) {
+        if (isRaw) {
             return super.endOfStream(lastTransformed)
         }
         return LastHttpContent.EMPTY_LAST_CONTENT
     }
 
     override fun upgrade(dst: ChannelHandlerContext) {
-        if(isRaw) {
+        if (isRaw) {
             return super.upgrade(dst)
         }
         dst.pipeline().apply {
