@@ -77,7 +77,7 @@ abstract class ServerPluginsTestSuite<TEngine : ApplicationEngine, TConfiguratio
             sendEvent("onCallRespond")
 
             call.afterFinish {
-                sendEvent("afterFinishon")
+                sendEvent("afterFinish")
             }
         }
         onCallRespond.afterTransform { call, _ ->

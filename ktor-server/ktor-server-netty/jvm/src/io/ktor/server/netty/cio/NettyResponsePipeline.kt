@@ -6,7 +6,6 @@ package io.ktor.server.netty.cio
 
 import io.ktor.http.*
 import io.ktor.server.netty.*
-import io.ktor.server.netty.http2.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
