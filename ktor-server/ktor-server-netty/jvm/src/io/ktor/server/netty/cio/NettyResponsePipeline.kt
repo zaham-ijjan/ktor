@@ -67,13 +67,15 @@ internal class NettyResponsePipeline constructor(
         try {
             call.response.responseFlag.addListener {
                 call.previousCallFinished.addListener {
-                    processCall(call)
+                    try {
+                        processCall(call)
+                    } finally {
+                        call.responseWriteJob.cancel()
+                    }
                 }
             }
         } catch (actualException: Throwable) {
             processCallFailed(call, actualException)
-        } finally {
-            call.responseWriteJob.cancel()
         }
     }
 
