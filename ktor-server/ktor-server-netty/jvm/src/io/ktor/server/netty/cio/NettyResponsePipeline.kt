@@ -233,52 +233,23 @@ internal class NettyResponsePipeline constructor(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
         requestMessageFuture: ChannelFuture
-    ) {
-        val channel = response.responseChannel
-
-        var unflushedBytes = 0
-        var lastFuture: ChannelFuture = requestMessageFuture
-
-        @Suppress("DEPRECATION")
-        channel.lookAheadSuspend {
-            while (true) {
-                val buffer = request(0, 1)
-                if (buffer == null) {
-                    if (!awaitAtLeast(1)) break
-                    continue
-                }
-
-                val rc = buffer.remaining()
-                val buf = context.alloc().buffer(rc)
-                val idx = buf.writerIndex()
-                buf.setBytes(idx, buffer)
-                buf.writerIndex(idx + rc)
-
-                consumed(rc)
-                unflushedBytes += rc
-
-                val message = call.transform(buf, false)
-
-                if (unflushedBytes >= UNFLUSHED_LIMIT) {
-                    context.read()
-                    val future = context.writeAndFlush(message)
-                    lastFuture = future
-                    future.suspendAwait()
-                    unflushedBytes = 0
-                } else {
-                    lastFuture = context.write(message)
-                }
-            }
-        }
-
-        val lastMessage = response.trailerMessage() ?: call.endOfStream(false)
-        finishCall(call, lastMessage, lastFuture)
+    ) = processBodyBase(call, response, requestMessageFuture) { _, unflushedBytes ->
+        unflushedBytes >= UNFLUSHED_LIMIT
     }
 
     private suspend fun processBodyFlusher(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
         requestMessageFuture: ChannelFuture
+    ) = processBodyBase(call, response, requestMessageFuture) { channel, unflushedBytes ->
+        unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0
+    }
+
+    private suspend fun processBodyBase(
+        call: NettyApplicationCall,
+        response: NettyApplicationResponse,
+        requestMessageFuture: ChannelFuture,
+        flushCondition: (channel: ByteReadChannel, unflushedBytes: Int) -> Boolean
     ) {
         val channel = response.responseChannel
 
@@ -290,7 +261,6 @@ internal class NettyResponsePipeline constructor(
             while (true) {
                 val buffer = request(0, 1)
                 if (buffer == null) {
-                    // stops here! Fix this
                     if (!awaitAtLeast(1)) break
                     continue
                 }
@@ -306,7 +276,7 @@ internal class NettyResponsePipeline constructor(
 
                 val message = call.transform(buf, false)
 
-                if (unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0) {
+                if (flushCondition.invoke(channel, unflushedBytes)) {
                     context.read()
                     val future = context.writeAndFlush(message)
                     lastFuture = future
