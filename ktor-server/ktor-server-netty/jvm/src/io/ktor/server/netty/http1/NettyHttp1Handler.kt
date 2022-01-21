@@ -18,9 +18,6 @@ import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
 import kotlinx.coroutines.*
 import java.io.*
-import java.nio.channels.*
-import java.util.*
-import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 
 internal class NettyHttp1Handler(
@@ -31,80 +28,62 @@ internal class NettyHttp1Handler(
     private val userContext: CoroutineContext
 ) : ChannelInboundHandlerAdapter(), CoroutineScope {
     private val handlerJob = CompletableDeferred<Nothing>()
-
     override val coroutineContext: CoroutineContext get() = handlerJob
 
+    private var configured = false
     private var skipEmpty = false
 
-    private val isReadComplete = AtomicBoolean(false)
-
     lateinit var responseWriter: NettyResponsePipeline
-
-    private var currentRequest: ByteReadChannel? = null
+    private var currentRequest: ByteChannel? = null
 
     @OptIn(InternalAPI::class)
-    override fun channelActive(context: ChannelHandlerContext) {
-        val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
+    override fun channelActive(ctx: ChannelHandlerContext) {
+        if (!configured) {
+            configured = true
+            responseWriter = NettyResponsePipeline(ctx, WriterEncapsulation.Http1, coroutineContext)
 
-        val requestBodyHandler = RequestBodyHandler(context, responseQueue)
-        responseWriter = NettyResponsePipeline(
-            context,
-            coroutineContext,
-            responseQueue,
-            isReadComplete
-        )
-
-        context.pipeline().apply {
-            addLast(requestBodyHandler)
-            addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
+            ctx.pipeline().apply {
+                addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
+            }
         }
-        context.fireChannelActive()
+        super.channelActive(ctx)
     }
 
-    override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        if (message is HttpRequest) {
-            handleRequest(context, message)
-        } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
+    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+        if (msg is HttpRequest) {
+            handleRequest(ctx, msg)
+        } else if (msg is LastHttpContent && !msg.content().isReadable && skipEmpty) {
             skipEmpty = false
-            message.release()
+            msg.release()
         } else {
-            context.fireChannelRead(message)
+            ctx.fireChannelRead(msg)
         }
     }
 
-    override fun channelInactive(context: ChannelHandlerContext) {
-        context.pipeline().remove(NettyApplicationCallHandler::class.java)
-        context.fireChannelInactive()
+    override fun channelInactive(ctx: ChannelHandlerContext) {
+        if (configured) {
+            configured = false
+            ctx.pipeline().apply {
+                remove(NettyApplicationCallHandler::class.java)
+            }
+        }
+        super.channelInactive(ctx)
     }
 
     @Suppress("OverridingDeprecatedMember")
-    override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         if (cause is IOException || cause is ChannelIOException) {
             environment.application.log.debug("I/O operation failed", cause)
             handlerJob.cancel()
         } else {
             handlerJob.completeExceptionally(cause)
         }
-        context.close()
-    }
-
-    override fun channelReadComplete(context: ChannelHandlerContext?) {
-        isReadComplete.set(true)
-        responseWriter.markReadingStopped()
-        super.channelReadComplete(context)
+        ctx.close()
     }
 
     private fun handleRequest(context: ChannelHandlerContext, message: HttpRequest) {
-        val call = getNettyApplicationCall(context, message)
+//        context.channel().config().isAutoRead = false
 
-        context.fireChannelRead(call)
-        responseWriter.processResponse(call)
-    }
-
-    private fun getNettyApplicationCall(
-        context: ChannelHandlerContext,
-        message: HttpRequest
-    ): NettyHttp1ApplicationCall {
         val requestBodyChannel = when {
             message is LastHttpContent && !message.content().isReadable -> null
             message.method() === HttpMethod.GET &&
@@ -112,12 +91,15 @@ internal class NettyHttp1Handler(
                 skipEmpty = true
                 null
             }
-            else -> handleContent(context, message)
-        }?.also {
-            currentRequest = it
+            else -> {
+                val channel = ByteChannel()
+                currentRequest = channel
+                // refactor this
+                channel
+            }
         }
 
-        return NettyHttp1ApplicationCall(
+        val call = NettyHttp1ApplicationCall(
             environment.application,
             context,
             message,
@@ -125,18 +107,46 @@ internal class NettyHttp1Handler(
             engineContext,
             userContext
         )
+
+        if (message is HttpContent) {
+            content(context, message)
+        }
+        responseWriter.processResponse(call)
     }
 
-    private fun handleContent(context: ChannelHandlerContext, message: HttpRequest): ByteReadChannel {
-        return when (message) {
-            is HttpContent -> {
-                val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)
-                bodyHandler.newChannel().also { bodyHandler.channelRead(context, message) }
+    private fun content(context: ChannelHandlerContext, message: HttpContent) {
+        try {
+            val contentBuffer = message.content()
+            pipeBuffer(context, contentBuffer)
+
+            if (message is LastHttpContent) {
+                currentRequest?.close()
             }
-            else -> {
-                val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)
-                bodyHandler.newChannel()
-            }
+        } finally {
+            message.release()
+        }
+    }
+
+
+    private fun pipeBuffer(context: ChannelHandlerContext, message: ByteBuf) {
+        if (message.readableBytes() == 0) return
+
+        currentRequest!!.writeByteBuf(context, message)
+
+        context.channel().config().isAutoRead = currentRequest!!.availableForWrite != 0
+    }
+}
+
+internal fun ByteWriteChannel.writeByteBuf(context: ChannelHandlerContext, buffer: ByteBuf) {
+    val length = buffer.readableBytes()
+    if (length == 0) return
+
+    val bytes = buffer.internalNioBuffer(buffer.readerIndex(), length)
+
+    // what to do?
+    runBlocking {
+        launch(NettyDispatcher.CurrentContext(context)) {
+            writeFully(bytes)
         }
     }
 }

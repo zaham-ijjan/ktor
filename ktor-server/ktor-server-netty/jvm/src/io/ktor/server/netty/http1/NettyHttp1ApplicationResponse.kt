@@ -74,12 +74,12 @@ internal class NettyHttp1ApplicationResponse constructor(
     }
 
     override suspend fun respondUpgrade(upgrade: OutgoingContent.ProtocolUpgrade) {
+        // rewrite ???
+        TODO()
+
         val nettyContext = context
         val nettyChannel = nettyContext.channel()
         val userAppContext = userContext + NettyDispatcher.CurrentContext(nettyContext)
-
-        val bodyHandler = nettyContext.pipeline().get(RequestBodyHandler::class.java)
-        val upgradedReadChannel = bodyHandler.upgrade()
 
         val upgradedWriteChannel = ByteChannel()
 
@@ -96,19 +96,17 @@ internal class NettyHttp1ApplicationResponse constructor(
                 throw cause
             }
         }
-
-        val job = upgrade.upgrade(upgradedReadChannel, upgradedWriteChannel, engineContext, userAppContext)
-
-        job.invokeOnCompletion {
-            upgradedWriteChannel.close()
-            bodyHandler.close()
-            upgradedReadChannel.cancel()
-        }
-
-        (call as NettyApplicationCall).responseWriteJob.join()
-        job.join()
-
-        context.channel().close()
+//
+//        val job = upgrade.upgrade(upgradedWriteChannel, engineContext, userAppContext)
+//
+//        job.invokeOnCompletion {
+//            upgradedWriteChannel.close()
+//        }
+//
+//        (call as NettyApplicationCall).responseWriteJob.join()
+//        job.join()
+//
+//        context.channel().close()
     }
 
     private fun setChunked(message: HttpResponse) {
