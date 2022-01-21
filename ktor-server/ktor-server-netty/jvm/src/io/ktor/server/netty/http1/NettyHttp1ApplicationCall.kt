@@ -64,4 +64,6 @@ internal class NettyHttp1ApplicationCall(
             replace(HttpServerCodec::class.java, "direct-encoder", NettyDirectEncoder())
         }
     }
+
+    override fun isContextCloseRequired(): Boolean = !isRaw
 }

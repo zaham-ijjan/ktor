@@ -108,7 +108,7 @@ internal class NettyResponsePipeline constructor(
         lastMessage: Any?,
         lastFuture: ChannelFuture
     ) {
-        val prepareForClose = !call.request.keepAlive || call.response.isUpgradeResponse()
+        val prepareForClose = (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
 
         val future = if (lastMessage != null) {
             context.write(lastMessage)

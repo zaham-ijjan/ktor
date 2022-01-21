@@ -46,6 +46,8 @@ public abstract class NettyApplicationCall(
         throw IllegalStateException("Already upgraded")
     }
 
+    internal abstract fun isContextCloseRequired(): Boolean
+
     override fun afterFinish(handler: (Throwable?) -> Unit) {
         responseWriteJob.invokeOnCompletion(handler)
     }
