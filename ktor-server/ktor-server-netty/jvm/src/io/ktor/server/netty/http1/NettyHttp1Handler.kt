@@ -30,44 +30,38 @@ internal class NettyHttp1Handler(
     private val handlerJob = CompletableDeferred<Nothing>()
     override val coroutineContext: CoroutineContext get() = handlerJob
 
-    private var configured = false
     private var skipEmpty = false
 
     lateinit var responseWriter: NettyResponsePipeline
-    private var currentRequest: ByteChannel? = null
+    private var currentRequest: ByteWriteChannel? = null
 
     @OptIn(InternalAPI::class)
     override fun channelActive(ctx: ChannelHandlerContext) {
-        if (!configured) {
-            configured = true
-            responseWriter = NettyResponsePipeline(ctx, WriterEncapsulation.Http1, coroutineContext)
+        responseWriter = NettyResponsePipeline(ctx, WriterEncapsulation.Http1, coroutineContext)
 
-            ctx.pipeline().apply {
-                addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
-            }
+        ctx.pipeline().apply {
+            addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
         }
-        super.channelActive(ctx)
+        //what is the diff super. and ctx.fire...
+        ctx.fireChannelActive()
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        if (msg is HttpRequest) {
-            handleRequest(ctx, msg)
-        } else if (msg is LastHttpContent && !msg.content().isReadable && skipEmpty) {
-            skipEmpty = false
-            msg.release()
-        } else {
-            ctx.fireChannelRead(msg)
+        responseWriter.startReading()
+        when (msg) {
+            is HttpRequest -> handleRequest(ctx, msg)
+            is HttpContent -> content(ctx, msg)
+            is ByteBuf -> pipeBuffer(ctx, msg)
+            else -> {
+                ctx.fireChannelRead(msg)
+            }
         }
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        if (configured) {
-            configured = false
-            ctx.pipeline().apply {
-                remove(NettyApplicationCallHandler::class.java)
-            }
-        }
-        super.channelInactive(ctx)
+        ctx.pipeline().remove(NettyApplicationCallHandler::class.java)
+        ctx.fireChannelInactive()
+//        super.channelInactive(ctx)
     }
 
     @Suppress("OverridingDeprecatedMember")
@@ -79,6 +73,11 @@ internal class NettyHttp1Handler(
             handlerJob.completeExceptionally(cause)
         }
         ctx.close()
+    }
+
+    override fun channelReadComplete(context: ChannelHandlerContext?) {
+        responseWriter.stopReading()
+        super.channelReadComplete(context)
     }
 
     private fun handleRequest(context: ChannelHandlerContext, message: HttpRequest) {
@@ -111,6 +110,9 @@ internal class NettyHttp1Handler(
         if (message is HttpContent) {
             content(context, message)
         }
+
+        context.fireChannelRead(call)
+
         responseWriter.processResponse(call)
     }
 
