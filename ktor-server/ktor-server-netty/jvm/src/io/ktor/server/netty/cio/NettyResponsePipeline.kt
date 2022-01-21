@@ -183,7 +183,7 @@ internal class NettyResponsePipeline constructor(
             else -> -1
         }
 
-        launch(context.executor().asCoroutineDispatcher()) {
+        launch(context.executor().asCoroutineDispatcher(), start = CoroutineStart.UNDISPATCHED) {
             processResponseBody(
                 call,
                 response,
