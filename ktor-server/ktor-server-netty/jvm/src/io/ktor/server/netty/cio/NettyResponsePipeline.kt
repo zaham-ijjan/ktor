@@ -49,10 +49,10 @@ internal class NettyResponsePipeline constructor(
                 val responsesCount = requests.getAndSet(0)
 
                 if (flushesCount == 0L) {
-                    logger.warn("No flushes")
+                    logger.info("No flushes")
                 } else {
                     val metric = responsesCount.toDouble() / flushesCount.toDouble()
-                    logger.warn("Responses to flushes metric = $metric")
+                    logger.info("Responses to flushes metric = $metric")
                 }
 
             }
