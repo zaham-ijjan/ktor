@@ -44,7 +44,7 @@ internal class NettyResponsePipeline constructor(
     init {
         GlobalScope.launch {
             while (true) {
-                delay(4000)
+                delay(500)
                 val flushesCount = flushes.getAndSet(0)
                 val responsesCount = requests.getAndSet(0)
 
@@ -54,7 +54,6 @@ internal class NettyResponsePipeline constructor(
                     val metric = responsesCount.toDouble() / flushesCount.toDouble()
                     logger.info("Responses to flushes metric = $metric")
                 }
-
             }
         }
     }
