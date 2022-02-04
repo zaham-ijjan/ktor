@@ -14,6 +14,7 @@ import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
+import org.slf4j.*
 import java.io.*
 import java.util.*
 import java.util.concurrent.atomic.*
@@ -38,6 +39,7 @@ internal class NettyResponsePipeline constructor(
     }
 
     val flushes = AtomicLong()
+    val logger = LoggerFactory.getLogger("FlushesMetric")
 
     init {
         GlobalScope.launch {
@@ -47,10 +49,10 @@ internal class NettyResponsePipeline constructor(
                 val responsesCount = requests.getAndSet(0)
 
                 if (flushesCount == 0L) {
-                    println("No flushes")
+                    logger.warn("No flushes")
                 } else {
                     val metric = responsesCount.toDouble() / flushesCount.toDouble()
-                    println("Responses to flushes metric = $metric")
+                    logger.warn("Responses to flushes metric = $metric")
                 }
 
             }
