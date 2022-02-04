@@ -55,7 +55,8 @@ internal class NettyHttp1Handler(
             coroutineContext,
             responseQueue,
             isReadComplete,
-            requests
+            requests,
+            environment.log
         )
 
         context.pipeline().apply {

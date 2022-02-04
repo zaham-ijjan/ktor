@@ -28,7 +28,8 @@ internal class NettyResponsePipeline constructor(
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
     private val isReadComplete: AtomicBoolean,
-    val requests: AtomicLong
+    val requests: AtomicLong,
+    val logger: Logger
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
@@ -39,7 +40,6 @@ internal class NettyResponsePipeline constructor(
     }
 
     val flushes = AtomicLong()
-    val logger = LoggerFactory.getLogger("FlushesMetric")
 
     init {
         GlobalScope.launch {
