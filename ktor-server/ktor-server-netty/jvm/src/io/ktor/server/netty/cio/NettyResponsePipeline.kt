@@ -162,11 +162,7 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(call, responseMessage)
         } else {
             needsFlush.set(true)
-            if (isReadComplete.get()) {
-                context.writeAndFlush(responseMessage)
-            } else {
-                context.write(responseMessage)
-            }
+            context.write(responseMessage)
         }
 
         if (responseMessage is FullHttpResponse) {
