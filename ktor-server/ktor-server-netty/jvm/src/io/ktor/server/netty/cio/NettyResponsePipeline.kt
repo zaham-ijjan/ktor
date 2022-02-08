@@ -6,7 +6,6 @@ package io.ktor.server.netty.cio
 
 import io.ktor.http.*
 import io.ktor.server.netty.*
-import io.ktor.server.netty.http2.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
@@ -25,10 +24,11 @@ private const val UNFLUSHED_LIMIT = 65536
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private val responseQueue: Queue<NettyApplicationCall>,
-    private val isReadComplete: AtomicBoolean,
+    private val responseQueue: Queue<NettyApplicationCall>
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
+
+    private val isReadComplete: AtomicBoolean = AtomicBoolean(false)
 
     private var processingStarted: Boolean = false
 
@@ -37,7 +37,9 @@ internal class NettyResponsePipeline constructor(
     }
 
     fun markReadingStopped() {
-        if (needsFlush.get()) {
+        isReadComplete.set(true)
+
+        if (needsFlush.get() && responseQueue.isEmpty()) {
             needsFlush.set(false)
             context.flush()
         }
@@ -108,12 +110,15 @@ internal class NettyResponsePipeline constructor(
         lastMessage: Any?,
         lastFuture: ChannelFuture
     ) {
-        val prepareForClose = (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
+        val prepareForClose =
+            (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
 
         val future = if (lastMessage != null) {
             context.write(lastMessage)
         } else {
             null
+        }?.addListener {
+            needsFlush.set(true)
         }
 
         val finishLambda = finishLambda@{
@@ -147,7 +152,7 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            if (responseQueue.isEmpty() && (needsFlush.get() || isReadComplete.get())) {
+            if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get()) {
                 needsFlush.set(false)
                 context.flush()
             }
@@ -161,10 +166,11 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            needsFlush.set(true)
             if (isReadComplete.get()) {
+                needsFlush.set(false)
                 context.writeAndFlush(responseMessage)
             } else {
+                needsFlush.set(true)
                 context.write(responseMessage)
             }
         }
@@ -223,7 +229,11 @@ internal class NettyResponsePipeline constructor(
         channel.readFully(buffer.nioBuffer(start, buffer.writableBytes()))
         buffer.writerIndex(start + size)
 
-        val future = context.write(call.transform(buffer, true))
+        needsFlush.set(true)
+        val future = context.write(call.transform(buffer, true)).addListener {
+            needsFlush.set(true)
+        }
+
         val lastMessage = response.trailerMessage() ?: call.endOfStream(true)
 
         finishCall(call, lastMessage, future)
@@ -280,10 +290,15 @@ internal class NettyResponsePipeline constructor(
                     context.read()
                     val future = context.writeAndFlush(message)
                     lastFuture = future
+                    future.addListener {
+                        needsFlush.set(true)
+                    }
                     future.suspendAwait()
                     unflushedBytes = 0
                 } else {
-                    lastFuture = context.write(message)
+                    lastFuture = context.write(message).addListener {
+                        needsFlush.set(true)
+                    }
                 }
             }
         }

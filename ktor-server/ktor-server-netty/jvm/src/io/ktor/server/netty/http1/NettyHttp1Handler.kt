@@ -36,8 +36,6 @@ internal class NettyHttp1Handler(
 
     private var skipEmpty = false
 
-    private val isReadComplete = AtomicBoolean(false)
-
     lateinit var responseWriter: NettyResponsePipeline
 
     private var currentRequest: ByteReadChannel? = null
@@ -50,8 +48,7 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            responseQueue,
-            isReadComplete
+            responseQueue
         )
 
         context.pipeline().apply {
@@ -89,7 +86,6 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
-        isReadComplete.set(true)
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }
