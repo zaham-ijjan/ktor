@@ -45,7 +45,6 @@ internal class NettyResponsePipeline constructor(
         if (needsFlush.get()) {
             needsFlush.set(false)
             context.flush()
-            readingStopped.incrementAndGet()
             flushes.incrementAndGet()
         }
     }
@@ -106,7 +105,6 @@ internal class NettyResponsePipeline constructor(
         call.isRaw = true
 
         context.flush()
-        processUpgradeFlushes.incrementAndGet()
         flushes.incrementAndGet()
         needsFlush.set(false)
         return future
@@ -149,7 +147,6 @@ internal class NettyResponsePipeline constructor(
 
     fun close(call: NettyApplicationCall, lastFuture: ChannelFuture) {
         context.flush()
-        closeFlushes.incrementAndGet()
         flushes.incrementAndGet()
         needsFlush.set(false)
         lastFuture.addListener {
