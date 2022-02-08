@@ -46,7 +46,7 @@ public class NettyApplicationEngine(
                     environment.log.error("Requests, flushes : $currentRequests, 0")
                 else {
                     environment.log.error("Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}")
-                    environment.log.error("processBodyBaseFlushes = $processBodyBaseFlushes, processCallFlushes = $processCallFlushes")
+                    environment.log.error("processBodyBaseFlushes = $processBodyBaseFlushes, processCallFlushes = $processCallFlushes, scheduleFlushes = $scheduleFlushes")
                 }
             }
         }

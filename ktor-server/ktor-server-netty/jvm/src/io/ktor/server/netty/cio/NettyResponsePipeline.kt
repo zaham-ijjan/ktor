@@ -24,6 +24,7 @@ private const val UNFLUSHED_LIMIT = 65536
 public val flushes: AtomicLong = AtomicLong()
 public val processBodyBaseFlushes: AtomicLong = AtomicLong()
 public val processCallFlushes: AtomicLong = AtomicLong()
+public val scheduleFlushes: AtomicLong = AtomicLong()
 
 @OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
@@ -44,6 +45,7 @@ internal class NettyResponsePipeline constructor(
         if (needsFlush.get()) {
             needsFlush.set(false)
             context.flush()
+            readingStopped.incrementAndGet()
             flushes.incrementAndGet()
         }
     }
@@ -104,6 +106,7 @@ internal class NettyResponsePipeline constructor(
         call.isRaw = true
 
         context.flush()
+        processUpgradeFlushes.incrementAndGet()
         flushes.incrementAndGet()
         needsFlush.set(false)
         return future
@@ -146,6 +149,7 @@ internal class NettyResponsePipeline constructor(
 
     fun close(call: NettyApplicationCall, lastFuture: ChannelFuture) {
         context.flush()
+        closeFlushes.incrementAndGet()
         flushes.incrementAndGet()
         needsFlush.set(false)
         lastFuture.addListener {
@@ -159,6 +163,7 @@ internal class NettyResponsePipeline constructor(
             if (responseQueue.isEmpty() && (needsFlush.get() || !isFullResponse)) {
                 context.flush()
                 needsFlush.set(false)
+                scheduleFlushes.incrementAndGet()
                 flushes.incrementAndGet()
             }
         }
@@ -171,9 +176,10 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            if(isReadComplete.get()) {
+            if (isReadComplete.get()) {
                 needsFlush.set(false)
                 flushes.incrementAndGet()
+                processCallFlushes.incrementAndGet()
                 context.writeAndFlush(responseMessage)
             } else {
                 needsFlush.set(true)
