@@ -106,7 +106,8 @@ internal class NettyResponsePipeline constructor(
     private fun finishCall(
         call: NettyApplicationCall,
         lastMessage: Any?,
-        lastFuture: ChannelFuture
+        lastFuture: ChannelFuture,
+        isFullResponse: Boolean
     ) {
         val prepareForClose = (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
 
@@ -122,7 +123,7 @@ internal class NettyResponsePipeline constructor(
                 return@finishLambda
             }
             if (responseQueue.isEmpty()) {
-                scheduleFlush()
+                scheduleFlush(isFullResponse)
             }
         }
 
@@ -145,9 +146,9 @@ internal class NettyResponsePipeline constructor(
         }
     }
 
-    private fun scheduleFlush() {
+    private fun scheduleFlush(isFullResponse: Boolean) {
         context.executor().execute {
-            if (responseQueue.isEmpty() && (needsFlush.get() || isReadComplete.get())) {
+            if (responseQueue.isEmpty() && (needsFlush.get() || !isFullResponse)) {
                 needsFlush.set(false)
                 context.flush()
             }
@@ -161,16 +162,24 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            needsFlush.set(true)
-            context.write(responseMessage)
+            if(isReadComplete.get()) {
+                needsFlush.set(false)
+                context.writeAndFlush(responseMessage)
+            } else {
+                needsFlush.set(true)
+                context.write(responseMessage)
+            }
         }
+
+        var isFullResponse = true
 
         if (responseMessage is FullHttpResponse) {
-            return finishCall(call, null, requestMessageFuture)
+            return finishCall(call, null, requestMessageFuture, isFullResponse)
         } else if (responseMessage is Http2HeadersFrame && responseMessage.isEndStream) {
-            return finishCall(call, null, requestMessageFuture)
+            return finishCall(call, null, requestMessageFuture, isFullResponse)
         }
 
+        isFullResponse = false
         val responseChannel = response.responseChannel
         val bodySize = when {
             responseChannel === ByteReadChannel.Empty -> 0
@@ -184,7 +193,8 @@ internal class NettyResponsePipeline constructor(
                 call,
                 response,
                 bodySize,
-                requestMessageFuture
+                requestMessageFuture,
+                isFullResponse
             )
         }
     }
@@ -193,25 +203,26 @@ internal class NettyResponsePipeline constructor(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
         bodySize: Int,
-        requestMessageFuture: ChannelFuture
+        requestMessageFuture: ChannelFuture,
+        isFullResponse: Boolean
     ) {
         try {
             when (bodySize) {
-                0 -> processEmpty(call, requestMessageFuture)
-                in 1..65536 -> processSmallContent(call, response, bodySize)
-                -1 -> processBodyFlusher(call, response, requestMessageFuture)
-                else -> processBodyGeneral(call, response, requestMessageFuture)
+                0 -> processEmpty(call, requestMessageFuture, isFullResponse)
+                in 1..65536 -> processSmallContent(call, response, bodySize, isFullResponse)
+                -1 -> processBodyFlusher(call, response, requestMessageFuture, isFullResponse)
+                else -> processBodyGeneral(call, response, requestMessageFuture, isFullResponse)
             }
         } catch (actualException: Throwable) {
             processCallFailed(call, actualException)
         }
     }
 
-    private fun processEmpty(call: NettyApplicationCall, lastFuture: ChannelFuture) {
-        return finishCall(call, call.endOfStream(false), lastFuture)
+    private fun processEmpty(call: NettyApplicationCall, lastFuture: ChannelFuture, isFullResponse: Boolean) {
+        return finishCall(call, call.endOfStream(false), lastFuture, isFullResponse)
     }
 
-    private suspend fun processSmallContent(call: NettyApplicationCall, response: NettyApplicationResponse, size: Int) {
+    private suspend fun processSmallContent(call: NettyApplicationCall, response: NettyApplicationResponse, size: Int, isFullResponse: Boolean) {
         val buffer = context.alloc().buffer(size)
         val channel = response.responseChannel
         val start = buffer.writerIndex()
@@ -222,22 +233,24 @@ internal class NettyResponsePipeline constructor(
         val future = context.write(call.transform(buffer, true))
         val lastMessage = response.trailerMessage() ?: call.endOfStream(true)
 
-        finishCall(call, lastMessage, future)
+        finishCall(call, lastMessage, future, isFullResponse)
     }
 
     private suspend fun processBodyGeneral(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
-        requestMessageFuture: ChannelFuture
-    ) = processBodyBase(call, response, requestMessageFuture) { _, unflushedBytes ->
+        requestMessageFuture: ChannelFuture,
+        isFullResponse: Boolean
+    ) = processBodyBase(call, response, requestMessageFuture, isFullResponse) { _, unflushedBytes ->
         unflushedBytes >= UNFLUSHED_LIMIT
     }
 
     private suspend fun processBodyFlusher(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
-        requestMessageFuture: ChannelFuture
-    ) = processBodyBase(call, response, requestMessageFuture) { channel, unflushedBytes ->
+        requestMessageFuture: ChannelFuture,
+        isFullResponse: Boolean
+    ) = processBodyBase(call, response, requestMessageFuture, isFullResponse) { channel, unflushedBytes ->
         unflushedBytes >= UNFLUSHED_LIMIT || channel.availableForRead == 0
     }
 
@@ -245,6 +258,7 @@ internal class NettyResponsePipeline constructor(
         call: NettyApplicationCall,
         response: NettyApplicationResponse,
         requestMessageFuture: ChannelFuture,
+        isFullResponse: Boolean,
         flushCondition: (channel: ByteReadChannel, unflushedBytes: Int) -> Boolean
     ) {
         val channel = response.responseChannel
@@ -285,7 +299,7 @@ internal class NettyResponsePipeline constructor(
         }
 
         val lastMessage = response.trailerMessage() ?: call.endOfStream(false)
-        finishCall(call, lastMessage, lastFuture)
+        finishCall(call, lastMessage, lastFuture, isFullResponse)
     }
 }
 
