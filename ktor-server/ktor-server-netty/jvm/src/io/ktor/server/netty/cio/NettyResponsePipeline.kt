@@ -21,12 +21,13 @@ import kotlin.coroutines.*
 
 private const val UNFLUSHED_LIMIT = 65536
 
-@OptIn(InternalAPI::class)
+@OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
     private val isReadComplete: AtomicBoolean,
+    val requests: AtomicLong
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
@@ -36,10 +37,31 @@ internal class NettyResponsePipeline constructor(
         it.setSuccess()
     }
 
+    val flushes = AtomicLong()
+
+    init {
+        GlobalScope.launch {
+            while (true) {
+                delay(4000)
+                val flushesCount = flushes.getAndSet(0)
+                val responsesCount = requests.getAndSet(0)
+
+                if (flushesCount == 0L) {
+                    println("No flushes")
+                } else {
+                    val metric = responsesCount.toDouble() / flushesCount.toDouble()
+                    println("Responses to flushes metric = $metric")
+                }
+
+            }
+        }
+    }
+
     fun markReadingStopped() {
         if (needsFlush.get()) {
             needsFlush.set(false)
             context.flush()
+            flushes.incrementAndGet()
         }
     }
 
@@ -99,6 +121,7 @@ internal class NettyResponsePipeline constructor(
         call.isRaw = true
 
         context.flush()
+        flushes.incrementAndGet()
         needsFlush.set(false)
         return future
     }
@@ -109,7 +132,8 @@ internal class NettyResponsePipeline constructor(
         lastFuture: ChannelFuture,
         isFullResponse: Boolean
     ) {
-        val prepareForClose = (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
+        val prepareForClose =
+            (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
 
         val future = if (lastMessage != null) {
             context.write(lastMessage)
@@ -139,6 +163,7 @@ internal class NettyResponsePipeline constructor(
 
     fun close(call: NettyApplicationCall, lastFuture: ChannelFuture) {
         context.flush()
+        flushes.incrementAndGet()
         needsFlush.set(false)
         lastFuture.addListener {
             context.close()
@@ -151,6 +176,8 @@ internal class NettyResponsePipeline constructor(
             if (responseQueue.isEmpty() && (needsFlush.get() || !isFullResponse)) {
                 needsFlush.set(false)
                 context.flush()
+                needsFlush.set(false)
+                flushes.incrementAndGet()
             }
         }
     }
@@ -164,6 +191,7 @@ internal class NettyResponsePipeline constructor(
         } else {
             if(isReadComplete.get()) {
                 needsFlush.set(false)
+                flushes.incrementAndGet()
                 context.writeAndFlush(responseMessage)
             } else {
                 needsFlush.set(true)
@@ -289,6 +317,7 @@ internal class NettyResponsePipeline constructor(
                 if (flushCondition.invoke(channel, unflushedBytes)) {
                     context.read()
                     val future = context.writeAndFlush(message)
+                    flushes.incrementAndGet()
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0

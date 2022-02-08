@@ -42,16 +42,20 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
+    private lateinit var requests: AtomicLong
+
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
         val requestBodyHandler = RequestBodyHandler(context, responseQueue)
+        requests = AtomicLong()
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
             responseQueue,
-            isReadComplete
+            isReadComplete,
+            requests
         )
 
         context.pipeline().apply {
@@ -63,6 +67,7 @@ internal class NettyHttp1Handler(
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         if (message is HttpRequest) {
+            requests.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
