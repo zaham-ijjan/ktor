@@ -23,6 +23,9 @@ import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 
+public val requests: AtomicLong = AtomicLong()
+public val connections: AtomicLong = AtomicLong()
+
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
     private val environment: ApplicationEngineEnvironment,
@@ -42,21 +45,18 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
-    private lateinit var requests: AtomicLong
-
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
+        connections.incrementAndGet()
+
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
         val requestBodyHandler = RequestBodyHandler(context, responseQueue)
-        requests = AtomicLong()
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
             responseQueue,
-            isReadComplete,
-            requests,
-            environment.log
+            isReadComplete
         )
 
         context.pipeline().apply {

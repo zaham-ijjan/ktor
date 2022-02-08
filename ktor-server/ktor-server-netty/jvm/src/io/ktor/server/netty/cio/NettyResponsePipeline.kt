@@ -6,7 +6,6 @@ package io.ktor.server.netty.cio
 
 import io.ktor.http.*
 import io.ktor.server.netty.*
-import io.ktor.server.netty.http2.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
@@ -22,14 +21,16 @@ import kotlin.coroutines.*
 
 private const val UNFLUSHED_LIMIT = 65536
 
+public val flushes: AtomicLong = AtomicLong()
+public val processBodyBaseFlushes: AtomicLong = AtomicLong()
+public val processCallFlushes: AtomicLong = AtomicLong()
+
 @OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
-    private val isReadComplete: AtomicBoolean,
-    val requests: AtomicLong,
-    val logger: Logger
+    private val isReadComplete: AtomicBoolean
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
@@ -37,25 +38,6 @@ internal class NettyResponsePipeline constructor(
 
     private var prevCall: ChannelPromise = context.newPromise().also {
         it.setSuccess()
-    }
-
-    val flushes = AtomicLong()
-
-    init {
-        GlobalScope.launch {
-            while (true) {
-                delay(500)
-                val flushesCount = flushes.getAndSet(0)
-                val responsesCount = requests.getAndSet(0)
-
-                if (flushesCount == 0L) {
-                    logger.info("No flushes")
-                } else {
-                    val metric = responsesCount.toDouble() / flushesCount.toDouble()
-                    logger.info("Responses to flushes metric = $metric")
-                }
-            }
-        }
     }
 
     fun markReadingStopped() {
@@ -175,7 +157,6 @@ internal class NettyResponsePipeline constructor(
     private fun scheduleFlush(isFullResponse: Boolean) {
         context.executor().execute {
             if (responseQueue.isEmpty() && (needsFlush.get() || !isFullResponse)) {
-                needsFlush.set(false)
                 context.flush()
                 needsFlush.set(false)
                 flushes.incrementAndGet()
@@ -319,6 +300,7 @@ internal class NettyResponsePipeline constructor(
                     context.read()
                     val future = context.writeAndFlush(message)
                     flushes.incrementAndGet()
+                    processBodyBaseFlushes.incrementAndGet()
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0
