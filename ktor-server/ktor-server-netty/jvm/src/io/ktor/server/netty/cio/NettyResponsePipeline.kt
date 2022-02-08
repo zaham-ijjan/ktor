@@ -163,7 +163,6 @@ internal class NettyResponsePipeline constructor(
     private fun scheduleFlush(isFullResponse: Boolean) {
         context.executor().execute {
             if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get()) {
-                needsFlush.set(false)
                 context.flush()
                 needsFlush.set(false)
                 scheduleFlushes.incrementAndGet()
@@ -181,6 +180,8 @@ internal class NettyResponsePipeline constructor(
         } else {
             if (isReadComplete.get()) {
                 needsFlush.set(false)
+                flushes.incrementAndGet()
+                processCallFlushes.incrementAndGet()
                 context.writeAndFlush(responseMessage)
             } else {
                 needsFlush.set(true)
