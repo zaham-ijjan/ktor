@@ -16,7 +16,12 @@ import kotlinx.coroutines.*
 fun main() {
     GlobalScope.launch {
         delay(5000)
-        val client = HttpClient()
+        val client = HttpClient() {
+            engine {
+                threadsCount = 4
+                pipelining = true
+            }
+        }
         while(true) {
             client.get("http://127.0.0.1:8080/")
         }

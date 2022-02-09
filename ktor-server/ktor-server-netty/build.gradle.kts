@@ -36,7 +36,7 @@ kotlin.sourceSets {
             api(project(":ktor-server:ktor-server-test-host"))
             api(project(":ktor-server:ktor-server-test-suites"))
             api(project(":ktor-server:ktor-server-core"))
-            api(project(":ktor-client:ktor-client-apache"))
+            api(project(":ktor-client:ktor-client-cio"))
 
             api("io.netty:netty-tcnative:$netty_tcnative_version")
             api("io.netty:netty-tcnative-boringssl-static:$netty_tcnative_version")
