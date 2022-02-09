@@ -6,6 +6,7 @@ package io.ktor.server.netty.cio
 
 import io.ktor.http.*
 import io.ktor.server.netty.*
+import io.ktor.server.netty.http1.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
@@ -189,9 +190,13 @@ internal class NettyResponsePipeline constructor(
         }
 
         if (responseMessage is FullHttpResponse) {
-            return finishCall(call, null, requestMessageFuture)
+            val r = finishCall(call, null, requestMessageFuture)
+            inProgress.decrementAndGet()
+            return r
         } else if (responseMessage is Http2HeadersFrame && responseMessage.isEndStream) {
-            return finishCall(call, null, requestMessageFuture)
+            val r = finishCall(call, null, requestMessageFuture)
+            inProgress.decrementAndGet()
+            return r
         }
 
         val responseChannel = response.responseChannel
@@ -209,6 +214,7 @@ internal class NettyResponsePipeline constructor(
                 bodySize,
                 requestMessageFuture
             )
+            inProgress.decrementAndGet()
         }
     }
 

@@ -26,6 +26,7 @@ import kotlin.coroutines.*
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
+public val inProgress: AtomicLong = AtomicLong()
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -67,6 +68,7 @@ internal class NettyHttp1Handler(
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         if (message is HttpRequest) {
             requests.incrementAndGet()
+            inProgress.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
