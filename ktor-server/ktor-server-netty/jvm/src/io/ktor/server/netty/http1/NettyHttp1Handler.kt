@@ -25,6 +25,7 @@ import kotlin.coroutines.*
 
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
+public val channelReadComplete: AtomicLong = AtomicLong()
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -92,6 +93,7 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
+        channelReadComplete.incrementAndGet()
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }

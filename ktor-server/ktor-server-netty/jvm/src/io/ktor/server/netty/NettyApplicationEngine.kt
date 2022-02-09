@@ -8,7 +8,6 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.cio.*
 import io.ktor.server.netty.http1.*
-import io.ktor.server.util.*
 import io.ktor.util.*
 import io.ktor.util.network.*
 import io.ktor.util.pipeline.*
@@ -42,12 +41,17 @@ public class NettyApplicationEngine(
                 delay(2000)
                 val currentRequests = requests.get() * 1.0
                 val currentFlushes = flushes.get()
+                val currentChannelReadComplete = channelReadComplete.get()
+
                 if (currentFlushes == 0L)
                     environment.log.error("Requests, flushes : $currentRequests, 0")
-                else {
+                else 
                     environment.log.error("Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}")
-                    environment.log.error("processBodyBaseFlushes = $processBodyBaseFlushes, processCallFlushes = $processCallFlushes, scheduleFlushes = $scheduleFlushes")
-                }
+
+                if (currentChannelReadComplete == 0L)
+                    environment.log.error("Requests, channelReadComplete : $currentRequests, 0")
+                else
+                    environment.log.error("Requests($currentRequests)/channelReadComplete($currentChannelReadComplete) = ${currentRequests / currentChannelReadComplete}")
             }
         }
     }

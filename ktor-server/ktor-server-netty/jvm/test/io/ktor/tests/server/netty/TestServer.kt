@@ -18,7 +18,7 @@ fun main() {
         delay(5000)
         val client = HttpClient() {
             engine {
-                threadsCount = 4
+                threadsCount = 8
                 pipelining = true
             }
         }
