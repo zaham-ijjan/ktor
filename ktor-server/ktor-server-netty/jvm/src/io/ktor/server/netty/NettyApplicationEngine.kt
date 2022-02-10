@@ -49,12 +49,17 @@ public class NettyApplicationEngine(
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
                 } else {
-                    environment.log.error("Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}")
+                    environment.log.error(
+                        "Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}"
+                    )
                 }
                 if (currentChannelReadComplete == 0L) {
                     environment.log.error("Requests, channelReadComplete : $currentRequests, 0")
                 } else {
-                    environment.log.error("Requests($currentRequests)/channelReadComplete($currentChannelReadComplete) = ${currentRequests / currentChannelReadComplete}")
+                    environment.log.error(
+                        "Requests($currentRequests)/channelReadComplete($currentChannelReadComplete)" +
+                            " = ${currentRequests / currentChannelReadComplete}"
+                    )
                 }
             }
         }
