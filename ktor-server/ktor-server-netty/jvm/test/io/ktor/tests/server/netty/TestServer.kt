@@ -22,7 +22,7 @@ fun main() {
                 pipelining = true
             }
         }
-        while(true) {
+        while (true) {
             client.get("http://127.0.0.1:8080/")
         }
     }

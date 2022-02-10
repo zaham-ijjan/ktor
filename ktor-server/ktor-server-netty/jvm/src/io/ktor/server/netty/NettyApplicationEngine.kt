@@ -45,16 +45,17 @@ public class NettyApplicationEngine(
                 val currentInProgress = inProgress.get()
 
                 environment.log.error("In progress = $currentInProgress")
-                
-                if (currentFlushes == 0L)
-                    environment.log.error("Requests, flushes : $currentRequests, 0")
-                else
-                    environment.log.error("Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}")
 
-                if (currentChannelReadComplete == 0L)
+                if (currentFlushes == 0L) {
+                    environment.log.error("Requests, flushes : $currentRequests, 0")
+                } else {
+                    environment.log.error("Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}")
+                }
+                if (currentChannelReadComplete == 0L) {
                     environment.log.error("Requests, channelReadComplete : $currentRequests, 0")
-                else
+                } else {
                     environment.log.error("Requests($currentRequests)/channelReadComplete($currentChannelReadComplete) = ${currentRequests / currentChannelReadComplete}")
+                }
             }
         }
     }
