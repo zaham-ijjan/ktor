@@ -23,9 +23,7 @@ import kotlin.coroutines.*
 private const val UNFLUSHED_LIMIT = 65536
 
 public val flushes: AtomicLong = AtomicLong()
-public val processBodyBaseFlushes: AtomicLong = AtomicLong()
-public val processCallFlushes: AtomicLong = AtomicLong()
-public val scheduleFlushes: AtomicLong = AtomicLong()
+public val readCompleteFlushes: AtomicLong = AtomicLong()
 
 @OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
@@ -47,6 +45,7 @@ internal class NettyResponsePipeline constructor(
         isReadComplete.set(true)
 
         if (needsFlush.get() && responseQueue.isEmpty()) {
+            readCompleteFlushes.incrementAndGet()
             needsFlush.set(false)
             context.flush()
             flushes.incrementAndGet()
@@ -165,7 +164,6 @@ internal class NettyResponsePipeline constructor(
             if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get()) {
                 context.flush()
                 needsFlush.set(false)
-                scheduleFlushes.incrementAndGet()
                 flushes.incrementAndGet()
             }
         }
@@ -181,7 +179,6 @@ internal class NettyResponsePipeline constructor(
             if (isReadComplete.get()) {
                 needsFlush.set(false)
                 flushes.incrementAndGet()
-                processCallFlushes.incrementAndGet()
                 context.writeAndFlush(responseMessage)
             } else {
                 needsFlush.set(true)
@@ -309,7 +306,6 @@ internal class NettyResponsePipeline constructor(
                     context.read()
                     val future = context.writeAndFlush(message)
                     flushes.incrementAndGet()
-                    processBodyBaseFlushes.incrementAndGet()
                     lastFuture = future
                     future.addListener {
                         needsFlush.set(true)

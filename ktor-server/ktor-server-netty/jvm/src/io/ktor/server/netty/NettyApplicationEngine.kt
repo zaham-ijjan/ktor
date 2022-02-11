@@ -43,8 +43,9 @@ public class NettyApplicationEngine(
                 val currentFlushes = flushes.get()
                 val currentChannelReadComplete = channelReadComplete.get()
                 val currentInProgress = inProgress.get()
+                val currentReadCompleteFlushes = readCompleteFlushes.get()
 
-                environment.log.error("In progress = $currentInProgress")
+                environment.log.error("In progress = $currentInProgress, readCompleteFlushes = $currentReadCompleteFlushes")
 
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
