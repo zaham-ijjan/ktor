@@ -23,7 +23,6 @@ import kotlin.coroutines.*
 private const val UNFLUSHED_LIMIT = 65536
 
 public val flushes: AtomicLong = AtomicLong()
-public val readCompleteFlushes: AtomicLong = AtomicLong()
 
 @OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
@@ -43,9 +42,7 @@ internal class NettyResponsePipeline constructor(
 
     fun markReadingStopped() {
         isReadComplete.set(true)
-
         if (needsFlush.get() && responseQueue.isEmpty()) {
-            readCompleteFlushes.incrementAndGet()
             needsFlush.set(false)
             context.flush()
             flushes.incrementAndGet()

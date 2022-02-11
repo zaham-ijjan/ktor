@@ -27,6 +27,7 @@ public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
 public val inProgress: AtomicLong = AtomicLong()
+public val channelReadCount: AtomicLong = AtomicLong()
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -66,6 +67,8 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
+        channelReadCount.incrementAndGet()
+
         if (message is HttpRequest) {
             requests.incrementAndGet()
             inProgress.incrementAndGet()

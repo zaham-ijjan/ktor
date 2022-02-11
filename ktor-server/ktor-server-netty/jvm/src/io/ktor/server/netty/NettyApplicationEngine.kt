@@ -39,19 +39,19 @@ public class NettyApplicationEngine(
         GlobalScope.launch {
             while (true) {
                 delay(2000)
-                val currentRequests = requests.get() * 1.0
-                val currentFlushes = flushes.get()
-                val currentChannelReadComplete = channelReadComplete.get()
+                val currentRequests = requests.getAndSet(0)
+                val currentFlushes = flushes.getAndSet(0)
+                val currentChannelReadComplete = channelReadComplete.getAndSet(0)
+                val currentChannelReadCount = channelReadCount.getAndSet(0)
                 val currentInProgress = inProgress.get()
-                val currentReadCompleteFlushes = readCompleteFlushes.get()
 
-                environment.log.error("In progress = $currentInProgress, readCompleteFlushes = $currentReadCompleteFlushes")
+                environment.log.error("In progress = $currentInProgress, channelReadCount = $currentChannelReadCount")
 
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
                 } else {
                     environment.log.error(
-                        "Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests / currentFlushes}"
+                        "Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests*1.0 / currentFlushes}"
                     )
                 }
                 if (currentChannelReadComplete == 0L) {
@@ -59,7 +59,7 @@ public class NettyApplicationEngine(
                 } else {
                     environment.log.error(
                         "Requests($currentRequests)/channelReadComplete($currentChannelReadComplete)" +
-                            " = ${currentRequests / currentChannelReadComplete}"
+                            " = ${currentRequests*1.0 / currentChannelReadComplete}"
                     )
                 }
             }
