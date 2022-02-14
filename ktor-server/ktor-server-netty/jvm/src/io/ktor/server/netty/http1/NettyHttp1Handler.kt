@@ -19,6 +19,7 @@ import io.netty.util.concurrent.*
 import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
 import java.io.*
+import java.lang.ref.*
 import java.nio.channels.*
 import java.util.*
 import java.util.concurrent.atomic.*
@@ -29,7 +30,7 @@ public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
 public val MAX_CONNECTIONS_NUMBER: Int = 500
-public val inProgressArray: Array<Long?> = Array(MAX_CONNECTIONS_NUMBER) { null }
+public val inProgressArray: Array<AtomicLong?> = Array(MAX_CONNECTIONS_NUMBER) { null }
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -48,13 +49,15 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
-    private var myConnectionNumber: Int = -1
+    private lateinit var myInProgress: WeakReference<AtomicLong>
 
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
-        myConnectionNumber = (connections.incrementAndGet().toInt() + MAX_CONNECTIONS_NUMBER) % MAX_CONNECTIONS_NUMBER
-        inProgressArray[myConnectionNumber] = 0L
+        val myConnectionNumber = (connections.incrementAndGet().toInt() + MAX_CONNECTIONS_NUMBER) % MAX_CONNECTIONS_NUMBER
+        val p = AtomicLong()
+        myInProgress = WeakReference(p)
+        inProgressArray[myConnectionNumber] = p
 
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
@@ -63,7 +66,7 @@ internal class NettyHttp1Handler(
             context,
             coroutineContext,
             responseQueue,
-            myConnectionNumber
+            myInProgress
         )
 
         context.pipeline().apply {
@@ -76,7 +79,7 @@ internal class NettyHttp1Handler(
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         if (message is HttpRequest) {
             requests.incrementAndGet()
-            inProgressArray[myConnectionNumber] = (inProgressArray[myConnectionNumber] ?: 0L) + 1
+            myInProgress.get()?.incrementAndGet()
 
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
@@ -88,16 +91,14 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-        inProgressArray[myConnectionNumber] = null
-
+//        inProgressArray[myConnectionNumber] = null
         context.pipeline().remove(NettyApplicationCallHandler::class.java)
         context.fireChannelInactive()
     }
 
     @Suppress("OverridingDeprecatedMember")
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-        inProgressArray[myConnectionNumber] = null
-
+//        inProgressArray[myConnectionNumber] = null
         if (cause is IOException || cause is ChannelIOException) {
             environment.application.log.debug("I/O operation failed", cause)
             handlerJob.cancel()

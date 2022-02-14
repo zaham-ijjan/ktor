@@ -16,6 +16,7 @@ import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
 import org.slf4j.*
 import java.io.*
+import java.lang.ref.*
 import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
@@ -29,7 +30,7 @@ internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
     private val responseQueue: Queue<NettyApplicationCall>,
-    private var myConnectionNumber: Int
+    private var myInProgress: WeakReference<AtomicLong>
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
@@ -186,11 +187,11 @@ internal class NettyResponsePipeline constructor(
 
         if (responseMessage is FullHttpResponse) {
             val r = finishCall(call, null, requestMessageFuture)
-            inProgressArray[myConnectionNumber] = (inProgressArray[myConnectionNumber] ?: 0L) - 1
+            myInProgress.get()?.decrementAndGet()
             return r
         } else if (responseMessage is Http2HeadersFrame && responseMessage.isEndStream) {
             val r = finishCall(call, null, requestMessageFuture)
-            inProgressArray[myConnectionNumber] = (inProgressArray[myConnectionNumber] ?: 0L) - 1
+            myInProgress.get()?.decrementAndGet()
             return r
         }
 
@@ -209,7 +210,7 @@ internal class NettyResponsePipeline constructor(
                 bodySize,
                 requestMessageFuture
             )
-            inProgressArray[myConnectionNumber] = (inProgressArray[myConnectionNumber] ?: 0L) - 1
+            myInProgress.get()?.decrementAndGet()
         }
     }
 
