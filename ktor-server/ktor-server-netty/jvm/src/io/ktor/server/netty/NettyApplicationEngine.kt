@@ -35,6 +35,33 @@ public class NettyApplicationEngine(
     configure: Configuration.() -> Unit = {}
 ) : BaseApplicationEngine(environment) {
 
+    public fun createGist(step: Int) {
+        var inProgressSum = 0L
+        var countedConnections = 0
+        var maxValue = 0
+
+        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
+            inProgressArray[i]?.let {
+                val v = it.get()
+                inProgressSum += v
+                if(v > maxValue)
+                    maxValue = v.toInt()
+                countedConnections++
+            }
+        }
+        environment.log.error("Gist for values in [$0, $maxValue] with step = $step")
+        val gist = Array(step) { 0 }
+
+        val partSize = (maxValue) / step
+        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
+            inProgressArray[i]?.let {
+                gist[(it.get()*1.0/partSize).toInt()]++
+            }
+        }
+        environment.log.error("gist = $gist")
+        environment.log.error("(inProgressSum=$inProgressSum, countedConnections=$countedConnections). Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
+    }
+
     init {
         GlobalScope.launch {
             while (true) {
@@ -43,16 +70,7 @@ public class NettyApplicationEngine(
                 val currentFlushes = flushes.getAndSet(0)
                 val currentChannelReadComplete = channelReadComplete.getAndSet(0)
 
-                var inProgressSum = 0L
-                var countedConnections = 0
-
-                for(i in 0 until MAX_CONNECTIONS_NUMBER) {
-                    inProgressArray[i]?.let {
-                        inProgressSum += it.get()
-                        countedConnections++
-                    }
-                }
-                environment.log.error("(inProgressSum=$inProgressSum, countedConnections=$countedConnections). Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
+                createGist(10)
 
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
