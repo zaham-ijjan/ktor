@@ -28,7 +28,8 @@ public val flushes: AtomicLong = AtomicLong()
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private val responseQueue: Queue<NettyApplicationCall>
+    private val responseQueue: Queue<NettyApplicationCall>,
+    private var myInProgress: AtomicLong = AtomicLong()
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
@@ -185,11 +186,11 @@ internal class NettyResponsePipeline constructor(
 
         if (responseMessage is FullHttpResponse) {
             val r = finishCall(call, null, requestMessageFuture)
-            inProgress.decrementAndGet()
+            myInProgress.decrementAndGet()
             return r
         } else if (responseMessage is Http2HeadersFrame && responseMessage.isEndStream) {
             val r = finishCall(call, null, requestMessageFuture)
-            inProgress.decrementAndGet()
+            myInProgress.decrementAndGet()
             return r
         }
 
@@ -208,7 +209,7 @@ internal class NettyResponsePipeline constructor(
                 bodySize,
                 requestMessageFuture
             )
-            inProgress.decrementAndGet()
+            myInProgress.decrementAndGet()
         }
     }
 

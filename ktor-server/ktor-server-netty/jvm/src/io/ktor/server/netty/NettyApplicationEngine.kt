@@ -42,16 +42,21 @@ public class NettyApplicationEngine(
                 val currentRequests = requests.getAndSet(0)
                 val currentFlushes = flushes.getAndSet(0)
                 val currentChannelReadComplete = channelReadComplete.getAndSet(0)
-                val currentChannelReadCount = channelReadCount.getAndSet(0)
-                val currentInProgress = inProgress.get()
 
-                environment.log.error("In progress = $currentInProgress, channelReadCount = $currentChannelReadCount")
+                var inProgressSum = 0L
+                val currentConnections = connections.get().toInt()
+                for(i in 0 until currentConnections) {
+                    inProgressArray[i]?.get()?.let {
+                        inProgressSum += it
+                    }
+                }
+                environment.log.error("Average in progress = ${(inProgressSum*1.0) / (currentConnections*1.0)}")
 
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
                 } else {
                     environment.log.error(
-                        "Requests($currentRequests)/flushes($currentFlushes) = ${currentRequests*1.0 / currentFlushes}"
+                        "Requests($currentRequests)/flushes($currentFlushes) = ${(currentRequests*1.0) / (currentFlushes*1.0)}"
                     )
                 }
                 if (currentChannelReadComplete == 0L) {
@@ -59,7 +64,7 @@ public class NettyApplicationEngine(
                 } else {
                     environment.log.error(
                         "Requests($currentRequests)/channelReadComplete($currentChannelReadComplete)" +
-                            " = ${currentRequests*1.0 / currentChannelReadComplete}"
+                            " = ${(currentRequests*1.0) / (currentChannelReadComplete*1.0)}"
                     )
                 }
             }

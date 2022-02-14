@@ -16,18 +16,19 @@ import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
+import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
 import java.io.*
 import java.nio.channels.*
 import java.util.*
 import java.util.concurrent.atomic.*
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.*
 
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
-public val inProgress: AtomicLong = AtomicLong()
-public val channelReadCount: AtomicLong = AtomicLong()
+public val inProgressArray: Array<AtomicLong?> = Array(3000) { null }
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -46,9 +47,14 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
+    private var myConnectionNumber: Int = -1
+    private var myInProgress: AtomicLong = AtomicLong()
+
+
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
-        connections.incrementAndGet()
+        myConnectionNumber = connections.incrementAndGet().toInt()
+        inProgressArray[myConnectionNumber] = myInProgress
 
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
@@ -56,7 +62,8 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            responseQueue
+            responseQueue,
+            myInProgress
         )
 
         context.pipeline().apply {
@@ -67,11 +74,9 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        channelReadCount.incrementAndGet()
-
         if (message is HttpRequest) {
             requests.incrementAndGet()
-            inProgress.incrementAndGet()
+            myInProgress.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
