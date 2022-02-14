@@ -44,13 +44,17 @@ public class NettyApplicationEngine(
                 val currentChannelReadComplete = channelReadComplete.getAndSet(0)
 
                 var inProgressSum = 0L
-                val currentConnections = connections.get().toInt()
-                for(i in 0 until currentConnections) {
-                    inProgressArray[i]?.get()?.let {
+                var countedConnections = 0
+                var i = connections.get().toInt() - 1
+
+                while(i >= 0 && countedConnections < 200) {
+                    inProgressArray[i]?.let {
                         inProgressSum += it
                     }
+                    countedConnections++
+                    i--
                 }
-                environment.log.error("Average in progress = ${(inProgressSum*1.0) / (currentConnections*1.0)}")
+                environment.log.error("Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
 
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")

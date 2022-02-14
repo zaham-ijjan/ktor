@@ -28,7 +28,7 @@ import kotlin.coroutines.*
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
-public val inProgressArray: Array<AtomicLong?> = Array(50000) { null }
+public val inProgressArray: Array<Long?> = Array(70000) { null }
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -48,13 +48,12 @@ internal class NettyHttp1Handler(
     private var currentRequest: ByteReadChannel? = null
 
     private var myConnectionNumber: Int = -1
-    private var myInProgress: AtomicLong = AtomicLong()
 
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
         myConnectionNumber = connections.incrementAndGet().toInt()
-        inProgressArray[myConnectionNumber] = myInProgress
+        inProgressArray[myConnectionNumber] = 0L
 
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
 
@@ -63,7 +62,7 @@ internal class NettyHttp1Handler(
             context,
             coroutineContext,
             responseQueue,
-            myInProgress
+            myConnectionNumber
         )
 
         context.pipeline().apply {
@@ -76,7 +75,8 @@ internal class NettyHttp1Handler(
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         if (message is HttpRequest) {
             requests.incrementAndGet()
-            myInProgress.incrementAndGet()
+            inProgressArray[myConnectionNumber] = (inProgressArray[myConnectionNumber] ?: 0L) + 1
+
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
@@ -87,12 +87,16 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
+        inProgressArray[myConnectionNumber] = null
+
         context.pipeline().remove(NettyApplicationCallHandler::class.java)
         context.fireChannelInactive()
     }
 
     @Suppress("OverridingDeprecatedMember")
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
+        inProgressArray[myConnectionNumber] = null
+
         if (cause is IOException || cause is ChannelIOException) {
             environment.application.log.debug("I/O operation failed", cause)
             handlerJob.cancel()
