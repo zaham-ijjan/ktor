@@ -21,6 +21,7 @@ import io.netty.channel.socket.nio.*
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
 import kotlinx.coroutines.*
+import java.lang.StringBuilder
 import java.lang.reflect.*
 import java.net.*
 import java.util.concurrent.*
@@ -49,16 +50,20 @@ public class NettyApplicationEngine(
                 countedConnections++
             }
         }
-        environment.log.error("Gist for values in [$0, $maxValue] with step = $step")
-        val gist = Array(step) { 0 }
+        environment.log.error("Gist for values in [0, $maxValue] with step = $step")
+        val gist = Array(step + 1) { 0 }
 
-        val partSize = (maxValue) / step
+        val partSize = (maxValue)*1.0 / step
         for(i in 0 until MAX_CONNECTIONS_NUMBER) {
             inProgressArray[i]?.let {
-                gist[(it.get()*1.0/partSize).toInt()]++
+                gist[(it.get()/partSize).toInt()]++
             }
         }
-        environment.log.error("gist = $gist")
+        val gistString = StringBuilder()
+        gist.forEach {
+            gistString.append("$it, ")
+        }
+        environment.log.error("gist = $gistString")
         environment.log.error("(inProgressSum=$inProgressSum, countedConnections=$countedConnections). Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
     }
 
