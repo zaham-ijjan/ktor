@@ -28,7 +28,7 @@ import kotlin.coroutines.*
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
-public val inProgressArray: Array<AtomicLong?> = Array(3000) { null }
+public val inProgressArray: Array<AtomicLong?> = Array(50000) { null }
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
