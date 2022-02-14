@@ -45,13 +45,14 @@ public class NettyApplicationEngine(
 
                 var inProgressSum = 0L
                 var countedConnections = 0
-                var i = connections.get().toInt() - 1
+                val initPosition = connections.get().toInt() - 1
+                var i = initPosition
 
-                while(i >= 0 && countedConnections < 200) {
+                while(i + 1 != initPosition) {
                     inProgressArray[i]?.let {
                         inProgressSum += it
+                        countedConnections++
                     }
-                    countedConnections++
                     i--
                 }
                 environment.log.error("Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")

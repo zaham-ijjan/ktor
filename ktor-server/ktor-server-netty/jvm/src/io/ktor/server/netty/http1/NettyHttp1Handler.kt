@@ -28,7 +28,8 @@ import kotlin.coroutines.*
 public val requests: AtomicLong = AtomicLong()
 public val connections: AtomicLong = AtomicLong()
 public val channelReadComplete: AtomicLong = AtomicLong()
-public val inProgressArray: Array<Long?> = Array(70000) { null }
+public val MAX_CONNECTIONS_NUMBER: Int = 500
+public val inProgressArray: Array<Long?> = Array(MAX_CONNECTIONS_NUMBER) { null }
 
 internal class NettyHttp1Handler(
     private val enginePipeline: EnginePipeline,
@@ -52,7 +53,7 @@ internal class NettyHttp1Handler(
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
-        myConnectionNumber = connections.incrementAndGet().toInt()
+        myConnectionNumber = (connections.incrementAndGet().toInt() + MAX_CONNECTIONS_NUMBER) % MAX_CONNECTIONS_NUMBER
         inProgressArray[myConnectionNumber] = 0L
 
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
