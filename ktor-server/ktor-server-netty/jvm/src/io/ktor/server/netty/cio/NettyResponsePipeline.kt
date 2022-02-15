@@ -114,11 +114,11 @@ internal class NettyResponsePipeline constructor(
             (!call.request.keepAlive || call.response.isUpgradeResponse()) && call.isContextCloseRequired()
 
         val future = if (lastMessage != null) {
-            context.write(lastMessage)
+            val f = context.write(lastMessage)
+            needsFlush.set(true)
+            f
         } else {
             null
-        }?.addListener {
-            needsFlush.set(true)
         }
 
         val finishLambda = finishLambda@{
@@ -167,11 +167,13 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(call, responseMessage)
         } else {
             if (isReadComplete.get()) {
+                val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
-                context.writeAndFlush(responseMessage)
+                f
             } else {
+                val f = context.write(responseMessage)
                 needsFlush.set(true)
-                context.write(responseMessage)
+                f
             }
         }
 
@@ -229,10 +231,8 @@ internal class NettyResponsePipeline constructor(
         channel.readFully(buffer.nioBuffer(start, buffer.writableBytes()))
         buffer.writerIndex(start + size)
 
+        val future = context.write(call.transform(buffer, true))
         needsFlush.set(true)
-        val future = context.write(call.transform(buffer, true)).addListener {
-            needsFlush.set(true)
-        }
 
         val lastMessage = response.trailerMessage() ?: call.endOfStream(true)
 
@@ -288,18 +288,14 @@ internal class NettyResponsePipeline constructor(
 
                 if (flushCondition.invoke(channel, unflushedBytes)) {
                     context.read()
+                    val future = context.writeAndFlush(message)
                     needsFlush.set(true)
-                    val future = context.writeAndFlush(message).addListener {
-                        needsFlush.set(true)
-                    }
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0
                 } else {
+                    lastFuture = context.write(message)
                     needsFlush.set(true)
-                    lastFuture = context.write(message).addListener {
-                        needsFlush.set(true)
-                    }
                 }
             }
         }
