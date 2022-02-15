@@ -46,23 +46,11 @@ internal class NettyResponsePipeline constructor(
     }
 
     fun processResponse(call: NettyApplicationCall) {
-        responseQueue.add(call)
-        if (processingStarted) return
-        processingStarted = true
-        startResponseProcessing()
-    }
+        call.previousCallFinished = prevCall
+        call.callFinished = context.newPromise()
+        prevCall = call.callFinished
 
-    private fun startResponseProcessing() {
-        while (true) {
-            val call = responseQueue.poll() ?: break
-
-            call.previousCallFinished = prevCall
-            call.callFinished = context.newPromise()
-            prevCall = call.callFinished
-
-            processElement(call)
-        }
-        processingStarted = false
+        processElement(call)
     }
 
     private fun processElement(call: NettyApplicationCall) {
@@ -121,6 +109,8 @@ internal class NettyResponsePipeline constructor(
             null
         }
 
+        call.callFinished.setSuccess()
+
         val finishLambda = finishLambda@{
             if (prepareForClose) {
                 close(call, lastFuture)
@@ -135,18 +125,13 @@ internal class NettyResponsePipeline constructor(
             finishLambda()
         }
         finishLambda()
-
-        if (!prepareForClose) {
-            call.callFinished.setSuccess()
-        }
     }
 
-    fun close(call: NettyApplicationCall, lastFuture: ChannelFuture) {
+    fun close(lastFuture: ChannelFuture) {
         context.flush()
         needsFlush.set(false)
         lastFuture.addListener {
             context.close()
-            call.callFinished.setSuccess()
         }
     }
 
