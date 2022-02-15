@@ -35,66 +35,66 @@ public class NettyApplicationEngine(
     environment: ApplicationEngineEnvironment,
     configure: Configuration.() -> Unit = {}
 ) : BaseApplicationEngine(environment) {
-
-    public fun createGist(step: Int) {
-        var inProgressSum = 0L
-        var countedConnections = 0
-        var maxValue = 0
-
-        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
-            inProgressArray[i]?.let {
-                val v = it.get()
-                inProgressSum += v
-                if(v > maxValue)
-                    maxValue = v.toInt()
-                countedConnections++
-            }
-        }
-        environment.log.error("Gist for values in [0, $maxValue] with step = $step")
-        val gist = Array(step + 1) { 0 }
-
-        val partSize = (maxValue)*1.0 / step
-        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
-            inProgressArray[i]?.let {
-                gist[(it.get()/partSize).toInt()]++
-            }
-        }
-        val gistString = StringBuilder()
-        gist.forEach {
-            gistString.append("$it, ")
-        }
-        environment.log.error("gist = $gistString")
-        environment.log.error("(inProgressSum=$inProgressSum, countedConnections=$countedConnections). Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
-    }
-
-    init {
-        GlobalScope.launch {
-            while (true) {
-                delay(2000)
-                val currentRequests = requests.getAndSet(0)
-                val currentFlushes = flushes.getAndSet(0)
-                val currentChannelReadComplete = channelReadComplete.getAndSet(0)
-
-                createGist(10)
-
-                if (currentFlushes == 0L) {
-                    environment.log.error("Requests, flushes : $currentRequests, 0")
-                } else {
-                    environment.log.error(
-                        "Requests($currentRequests)/flushes($currentFlushes) = ${(currentRequests*1.0) / (currentFlushes*1.0)}"
-                    )
-                }
-                if (currentChannelReadComplete == 0L) {
-                    environment.log.error("Requests, channelReadComplete : $currentRequests, 0")
-                } else {
-                    environment.log.error(
-                        "Requests($currentRequests)/channelReadComplete($currentChannelReadComplete)" +
-                            " = ${(currentRequests*1.0) / (currentChannelReadComplete*1.0)}"
-                    )
-                }
-            }
-        }
-    }
+//
+//    public fun createGist(step: Int) {
+//        var inProgressSum = 0L
+//        var countedConnections = 0
+//        var maxValue = 0
+//
+//        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
+//            inProgressArray[i]?.let {
+//                val v = it.get()
+//                inProgressSum += v
+//                if(v > maxValue)
+//                    maxValue = v.toInt()
+//                countedConnections++
+//            }
+//        }
+//        environment.log.error("Gist for values in [0, $maxValue] with step = $step")
+//        val gist = Array(step + 1) { 0 }
+//
+//        val partSize = (maxValue)*1.0 / step
+//        for(i in 0 until MAX_CONNECTIONS_NUMBER) {
+//            inProgressArray[i]?.let {
+//                gist[(it.get()/partSize).toInt()]++
+//            }
+//        }
+//        val gistString = StringBuilder()
+//        gist.forEach {
+//            gistString.append("$it, ")
+//        }
+//        environment.log.error("gist = $gistString")
+//        environment.log.error("(inProgressSum=$inProgressSum, countedConnections=$countedConnections). Average in progress = ${(inProgressSum*1.0) / (countedConnections*1.0)}")
+//    }
+//
+//    init {
+//        GlobalScope.launch {
+//            while (true) {
+//                delay(2000)
+//                val currentRequests = requests.getAndSet(0)
+//                val currentFlushes = flushes.getAndSet(0)
+//                val currentChannelReadComplete = channelReadComplete.getAndSet(0)
+//
+//                createGist(10)
+//
+//                if (currentFlushes == 0L) {
+//                    environment.log.error("Requests, flushes : $currentRequests, 0")
+//                } else {
+//                    environment.log.error(
+//                        "Requests($currentRequests)/flushes($currentFlushes) = ${(currentRequests*1.0) / (currentFlushes*1.0)}"
+//                    )
+//                }
+//                if (currentChannelReadComplete == 0L) {
+//                    environment.log.error("Requests, channelReadComplete : $currentRequests, 0")
+//                } else {
+//                    environment.log.error(
+//                        "Requests($currentRequests)/channelReadComplete($currentChannelReadComplete)" +
+//                            " = ${(currentRequests*1.0) / (currentChannelReadComplete*1.0)}"
+//                    )
+//                }
+//            }
+//        }
+//    }
 
     /**
      * Configuration for the [NettyApplicationEngine]

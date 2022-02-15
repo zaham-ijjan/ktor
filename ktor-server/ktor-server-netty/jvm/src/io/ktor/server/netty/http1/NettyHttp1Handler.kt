@@ -11,19 +11,14 @@ import io.ktor.server.netty.cio.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
-import io.ktor.utils.io.core.internal.*
-import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
-import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
 import java.io.*
 import java.lang.ref.*
-import java.nio.channels.*
 import java.util.*
 import java.util.concurrent.atomic.*
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.*
 
 public val requests: AtomicLong = AtomicLong()
@@ -51,10 +46,12 @@ internal class NettyHttp1Handler(
 
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
+    private val lastContentFlag: AtomicBoolean = AtomicBoolean(false)
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
-        val myConnectionNumber = (connections.incrementAndGet().toInt() + MAX_CONNECTIONS_NUMBER) % MAX_CONNECTIONS_NUMBER
+        val myConnectionNumber =
+            (connections.incrementAndGet().toInt() + MAX_CONNECTIONS_NUMBER) % MAX_CONNECTIONS_NUMBER
         val p = AtomicLong()
         myInProgress = WeakReference(p)
         inProgressArray[myConnectionNumber] = p
@@ -66,7 +63,8 @@ internal class NettyHttp1Handler(
             context,
             coroutineContext,
             responseQueue,
-            myInProgress
+            myInProgress,
+            lastContentFlag
         )
 
         context.pipeline().apply {
@@ -91,14 +89,12 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-//        inProgressArray[myConnectionNumber] = null
         context.pipeline().remove(NettyApplicationCallHandler::class.java)
         context.fireChannelInactive()
     }
 
     @Suppress("OverridingDeprecatedMember")
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-//        inProgressArray[myConnectionNumber] = null
         if (cause is IOException || cause is ChannelIOException) {
             environment.application.log.debug("I/O operation failed", cause)
             handlerJob.cancel()
@@ -109,6 +105,7 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
+        println("channelReadComplete")
         channelReadComplete.incrementAndGet()
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
@@ -151,7 +148,9 @@ internal class NettyHttp1Handler(
         return when (message) {
             is HttpContent -> {
                 val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)
-                bodyHandler.newChannel().also { bodyHandler.channelRead(context, message) }
+                bodyHandler.newChannel().also {
+                    bodyHandler.channelRead(context, message)
+                }
             }
             else -> {
                 val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)

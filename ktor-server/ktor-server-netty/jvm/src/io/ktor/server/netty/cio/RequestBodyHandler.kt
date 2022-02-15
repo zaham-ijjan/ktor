@@ -169,8 +169,11 @@ internal class RequestBodyHandler(
 
     private fun handleBytesRead(content: ReferenceCounted) {
         if (!queue.trySend(content).isSuccess) {
+            println("Process content failed $content")
             content.release()
             throw IllegalStateException("Unable to process received buffer: queue offer failed")
+        } else {
+            println("Process content done $content")
         }
     }
 

@@ -50,16 +50,16 @@ public abstract class NettyApplicationResponse(
         // because it should've been set by commitHeaders earlier
         val chunked = headers[HttpHeaders.TransferEncoding] == "chunked"
 
-        if (!responseMessageSent) {
-            val message = responseMessage(chunked, bytes)
-            responseChannel = when (message) {
-                is LastHttpContent -> ByteReadChannel.Empty
-                else -> ByteReadChannel(bytes)
-            }
-            responseMessage = message
-            responseFlag.setSuccess()
-            responseMessageSent = true
+        if (responseMessageSent) return
+
+        val message = responseMessage(chunked, bytes)
+        responseChannel = when (message) {
+            is LastHttpContent -> ByteReadChannel.Empty
+            else -> ByteReadChannel(bytes)
         }
+        responseMessage = message
+        responseFlag.setSuccess()
+        responseMessageSent = true
     }
 
     override suspend fun responseChannel(): ByteWriteChannel {
@@ -92,6 +92,7 @@ public abstract class NettyApplicationResponse(
                 responseMessage(chunked, last = false)
             }
         }
+
         responseFlag.setSuccess()
         responseMessageSent = true
     }
