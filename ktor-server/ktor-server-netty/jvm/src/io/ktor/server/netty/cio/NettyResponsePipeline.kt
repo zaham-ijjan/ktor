@@ -149,12 +149,10 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(call, responseMessage)
         } else {
             if (isReadComplete.get() && lastContentFlag.get()) {
-                println("Flush in process call")
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 f
             } else {
-                println("Avoid flushing in processCall: isReadComplete = ${isReadComplete.get()}, lastContentFlag = ${lastContentFlag.get()}")
                 val f = context.write(responseMessage)
                 needsFlush.set(true)
                 f
