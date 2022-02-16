@@ -572,6 +572,7 @@ abstract class HttpServerCommonTestSuite<TEngine : ApplicationEngine, TConfigura
             client.preparePost("http://127.0.0.1:$port/timed") {
                 setBody(requestBody)
             }.execute { httpResponse ->
+                println("Header response got")
                 assertEquals(httpResponse.status, HttpStatusCode.OK)
                 assertEquals(httpResponse.contentType(), ContentType.Text.Plain)
 
