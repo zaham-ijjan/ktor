@@ -41,13 +41,10 @@ internal class NettyHttp1Handler(
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
-        val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
-
-        val requestBodyHandler = RequestBodyHandler(context, responseQueue)
+        val requestBodyHandler = RequestBodyHandler(context)
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            responseQueue,
             lastContentFlag
         )
 
@@ -59,11 +56,17 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
+        println("Read message ${message::class.simpleName}")
+
         if(message is LastHttpContent) {
+            println("Last message")
             lastContentFlag.set(true)
         }
 
         if (message is HttpRequest) {
+            if(!message.isValid()) {
+                lastContentFlag.set(true)
+            }
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
@@ -90,6 +93,7 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
+        println("Channel read complete")
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }

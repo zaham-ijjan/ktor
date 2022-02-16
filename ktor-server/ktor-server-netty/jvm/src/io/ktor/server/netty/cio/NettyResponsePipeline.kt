@@ -24,7 +24,6 @@ private const val UNFLUSHED_LIMIT = 65536
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private val responseQueue: Queue<NettyApplicationCall>,
     private var lastContentFlag: AtomicBoolean
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
@@ -38,7 +37,7 @@ internal class NettyResponsePipeline constructor(
     fun markReadingStopped() {
         isReadComplete.set(true)
 
-        if (needsFlush.get() && responseQueue.isEmpty() && lastContentFlag.get()) {
+        if (needsFlush.get() && lastContentFlag.get()) {
             needsFlush.set(false)
             context.flush()
         }
@@ -115,9 +114,8 @@ internal class NettyResponsePipeline constructor(
                 close(lastFuture)
                 return@finishLambda
             }
-            if (responseQueue.isEmpty()) {
-                scheduleFlush()
-            }
+
+            scheduleFlush()
         }
 
         future?.addListener {
@@ -136,7 +134,7 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get() && lastContentFlag.get()) {
+            if (needsFlush.get() && isReadComplete.get() && lastContentFlag.get()) {
                 needsFlush.set(false)
                 context.flush()
             }
@@ -151,6 +149,7 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(call, responseMessage)
         } else {
             if (isReadComplete.get() && lastContentFlag.get()) {
+                println("Flush in process call")
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 f
