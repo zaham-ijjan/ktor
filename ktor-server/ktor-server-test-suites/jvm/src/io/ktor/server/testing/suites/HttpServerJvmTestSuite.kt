@@ -28,6 +28,59 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
 ) : EngineTestBase<TEngine, TConfiguration>(hostFactory) {
 
     @Test
+    fun testPipeliling() {
+        createAndStartServer {
+            route("/") {
+                get {
+                    val id = call.parameters["d"]?.toInt()
+                    if(id == 16) {
+                        println("Before delay")
+                        delay(4000)
+                        println("After delay")
+                    }
+                    println("Response for $id")
+                    call.respondText("Hello, $id")
+                }
+            }
+        }
+
+        val s = Socket()
+        s.tcpNoDelay = true
+
+        val builder = StringBuilder()
+        for(id in 1..15) {
+            builder.append("GET /?d=$id HTTP/1.1\r\n")
+            builder.append("Host: localhost\r\n")
+            builder.append("Connection: keep-alive\r\n")
+            builder.append("\r\n")
+        }
+        builder.append("GET /?d=16 HTTP/1.1\r\n")
+        builder.append("Host: localhost\r\n")
+        builder.append("Connection: close\r\n")
+        builder.append("\r\n")
+
+        val impudent = builder.toString().toByteArray()
+
+        s.connect(InetSocketAddress(port))
+        s.use { _ ->
+            s.getOutputStream().apply {
+                write(impudent)
+                flush()
+            }
+
+            val responses = s.getInputStream().bufferedReader(Charsets.ISO_8859_1).lineSequence()
+                .filterNot { line ->
+                    line.startsWith("Date") || line.startsWith("Server") ||
+                        line.startsWith("Content-") || line.toIntOrNull() != null ||
+                        line.isBlank() || line.startsWith("Connection") || line.startsWith("Keep-Alive")
+                }
+                .map { it.trim() }
+                .joinToString(separator = "\n").replace("200 OK", "200")
+            println(responses)
+        }
+    }
+
+    @Test
     fun testRequestTwiceInOneBufferWithKeepAlive() {
         createAndStartServer {
             get("/") {

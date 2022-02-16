@@ -14,11 +14,13 @@ import io.ktor.utils.io.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
+import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
 import java.io.*
 import java.lang.ref.*
 import java.util.*
 import java.util.concurrent.atomic.*
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.*
 
 public val requests: AtomicLong = AtomicLong()
@@ -44,7 +46,7 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
-    private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
+    private var writersCount: AtomicLong = AtomicLong()
 
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
@@ -60,7 +62,7 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            lastContentFlag,
+            writersCount,
             myInProgress
         )
 
@@ -72,14 +74,11 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        if(message is LastHttpContent) {
-            lastContentFlag.set(true)
-        }
-
         if (message is HttpRequest) {
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
-            
+
+            writersCount.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false

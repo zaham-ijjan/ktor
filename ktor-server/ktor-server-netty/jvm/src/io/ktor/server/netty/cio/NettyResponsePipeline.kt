@@ -27,7 +27,7 @@ public val flushes: AtomicLong = AtomicLong()
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private var lastContentFlag: AtomicBoolean,
+    private var writersCount: AtomicLong,
     private var myInProgress: WeakReference<AtomicLong>
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
@@ -41,7 +41,7 @@ internal class NettyResponsePipeline constructor(
     fun markReadingStopped() {
         isReadComplete.set(true)
 
-        if (needsFlush.get() && lastContentFlag.get()) {
+        if (needsFlush.get() && writersCount.get() == 0L) {
             needsFlush.set(false)
             context.flush()
             flushes.incrementAndGet()
@@ -108,8 +108,10 @@ internal class NettyResponsePipeline constructor(
         val future = if (lastMessage != null) {
             val f = context.write(lastMessage)
             needsFlush.set(true)
+            writersCount.decrementAndGet()
             f
         } else {
+            writersCount.decrementAndGet()
             null
         }
 
@@ -141,7 +143,8 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            if (needsFlush.get() && isReadComplete.get() && lastContentFlag.get()) {
+            val writersCountValue = writersCount.get()
+            if (needsFlush.get() && isReadComplete.get() && writersCountValue == 0L) {
                 context.flush()
                 flushes.incrementAndGet()
                 needsFlush.set(false)
@@ -156,7 +159,8 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            if (isReadComplete.get() && lastContentFlag.get()) {
+            val writersCountValue = writersCount.get()
+            if (isReadComplete.get() && writersCountValue == 0L) {
                 val f = context.writeAndFlush(responseMessage)
                 flushes.incrementAndGet()
                 needsFlush.set(false)
