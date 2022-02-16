@@ -79,10 +79,7 @@ internal class NettyHttp1Handler(
         if (message is HttpRequest) {
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
-
-            if(!message.isValid()) {
-                lastContentFlag.set(true)
-            }
+            
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
