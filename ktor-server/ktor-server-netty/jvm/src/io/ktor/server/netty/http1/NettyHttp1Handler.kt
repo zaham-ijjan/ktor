@@ -56,10 +56,7 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        println("Read message ${message::class.simpleName}")
-
         if(message is LastHttpContent) {
-            println("Last message")
             lastContentFlag.set(true)
         }
 
@@ -93,7 +90,6 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
-        println("Channel read complete")
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }
