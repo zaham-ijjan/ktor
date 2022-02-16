@@ -24,13 +24,12 @@ private const val UNFLUSHED_LIMIT = 65536
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private val responseQueue: Queue<NettyApplicationCall>
+    private val responseQueue: Queue<NettyApplicationCall>,
+    private var lastContentFlag: AtomicBoolean
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
     private val isReadComplete: AtomicBoolean = AtomicBoolean(false)
-
-    private var processingStarted: Boolean = false
 
     private var prevCall: ChannelPromise = context.newPromise().also {
         it.setSuccess()
@@ -39,7 +38,7 @@ internal class NettyResponsePipeline constructor(
     fun markReadingStopped() {
         isReadComplete.set(true)
 
-        if (needsFlush.get() && responseQueue.isEmpty()) {
+        if (needsFlush.get() && responseQueue.isEmpty() && lastContentFlag.get()) {
             needsFlush.set(false)
             context.flush()
         }
@@ -113,7 +112,7 @@ internal class NettyResponsePipeline constructor(
 
         val finishLambda = finishLambda@{
             if (prepareForClose) {
-                close(call, lastFuture)
+                close(lastFuture)
                 return@finishLambda
             }
             if (responseQueue.isEmpty()) {
@@ -137,7 +136,7 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get()) {
+            if (responseQueue.isEmpty() && needsFlush.get() && isReadComplete.get() && lastContentFlag.get()) {
                 needsFlush.set(false)
                 context.flush()
             }
@@ -151,11 +150,12 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            if (isReadComplete.get()) {
+            if (isReadComplete.get() && lastContentFlag.get()) {
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 f
             } else {
+                println("Avoid flushing in processCall: isReadComplete = ${isReadComplete.get()}, lastContentFlag = ${lastContentFlag.get()}")
                 val f = context.write(responseMessage)
                 needsFlush.set(true)
                 f
