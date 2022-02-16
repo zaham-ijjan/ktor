@@ -11,14 +11,11 @@ import io.ktor.server.netty.cio.*
 import io.ktor.util.*
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
-import io.ktor.utils.io.core.internal.*
-import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
 import kotlinx.coroutines.*
 import java.io.*
-import java.nio.channels.*
 import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
@@ -40,6 +37,8 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
+    private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
+
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
         val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
@@ -48,7 +47,8 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            responseQueue
+            responseQueue,
+            lastContentFlag
         )
 
         context.pipeline().apply {
@@ -59,6 +59,10 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
+        if(message is LastHttpContent) {
+            lastContentFlag.set(true)
+        }
+
         if (message is HttpRequest) {
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
