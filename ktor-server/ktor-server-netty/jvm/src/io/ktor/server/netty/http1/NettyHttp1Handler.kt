@@ -60,7 +60,8 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            lastContentFlag
+            lastContentFlag,
+            myInProgress
         )
 
         context.pipeline().apply {

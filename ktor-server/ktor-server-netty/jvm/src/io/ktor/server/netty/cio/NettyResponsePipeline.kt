@@ -27,7 +27,8 @@ public val flushes: AtomicLong = AtomicLong()
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
-    private var lastContentFlag: AtomicBoolean
+    private var lastContentFlag: AtomicBoolean,
+    private var myInProgress: WeakReference<AtomicLong>
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
 
