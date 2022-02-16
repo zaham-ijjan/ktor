@@ -8,12 +8,9 @@ import io.ktor.http.*
 import io.ktor.http.HttpHeaders
 import io.ktor.http.content.*
 import io.ktor.server.engine.*
-import io.ktor.util.*
 import io.ktor.utils.io.*
-import io.netty.buffer.*
 import io.netty.channel.*
 import io.netty.handler.codec.http.*
-import kotlinx.coroutines.*
 import kotlin.coroutines.*
 
 public abstract class NettyApplicationResponse(
@@ -92,7 +89,6 @@ public abstract class NettyApplicationResponse(
                 responseMessage(chunked, last = false)
             }
         }
-
         responseFlag.setSuccess()
         responseMessageSent = true
     }

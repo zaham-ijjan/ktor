@@ -126,7 +126,7 @@ class TestApplicationTest {
 
         val TestPlugin = createApplicationPlugin("test", ::TestPluginConfig) {
             onCall {
-                val externalValue = client.get("https://test.com").bodyAsText()
+                val externalValue = pluginConfig.pluginClient.get("https://test.com").bodyAsText()
                 it.response.headers.append("test", externalValue)
             }
         }
@@ -158,6 +158,6 @@ class TestApplicationTest {
         }
 
         assertEquals("http", client.get("/echo").bodyAsText())
-        assertEquals("https", client.get("https://localhost:80/echo").bodyAsText())
+        assertEquals("https", client.get("https://localhost/echo").bodyAsText())
     }
 }

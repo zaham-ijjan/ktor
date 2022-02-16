@@ -4,7 +4,6 @@
 
 package io.ktor.server.netty.cio
 
-import io.ktor.server.netty.*
 import io.ktor.utils.io.*
 import io.netty.buffer.*
 import io.netty.channel.*
@@ -12,12 +11,10 @@ import io.netty.handler.codec.http.*
 import io.netty.util.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import java.util.Queue
 import kotlin.coroutines.*
 
 internal class RequestBodyHandler(
-    val context: ChannelHandlerContext,
-    private val requestQueue: Queue<NettyApplicationCall>
+    val context: ChannelHandlerContext
 ) : ChannelInboundHandlerAdapter(), CoroutineScope {
     private val handlerJob = CompletableDeferred<Nothing>()
 
@@ -63,7 +60,6 @@ internal class RequestBodyHandler(
             current?.close()
             queue.close()
             consumeAndReleaseQueue()
-            requestQueue.clear()
         }
     }
 
@@ -136,9 +132,7 @@ internal class RequestBodyHandler(
     }
 
     private fun requestMoreEvents() {
-        if (requestQueue.isEmpty()) {
-            context.read()
-        }
+        context.read()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -169,11 +163,8 @@ internal class RequestBodyHandler(
 
     private fun handleBytesRead(content: ReferenceCounted) {
         if (!queue.trySend(content).isSuccess) {
-            println("Process content failed $content")
             content.release()
             throw IllegalStateException("Unable to process received buffer: queue offer failed")
-        } else {
-            println("Process content done $content")
         }
     }
 

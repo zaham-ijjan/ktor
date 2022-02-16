@@ -16,15 +16,17 @@ import io.ktor.utils.io.core.*
 /**
  * Add [BasicAuthProvider] to client [Auth] providers.
  */
+@KtorDsl
 public fun Auth.basic(block: BasicAuthConfig.() -> Unit) {
     with(BasicAuthConfig().apply(block)) {
-        providers.add(BasicAuthProvider(_credentials, realm, _sendWithoutRequest))
+        this@basic.providers.add(BasicAuthProvider(_credentials, realm, _sendWithoutRequest))
     }
 }
 
 /**
  * [BasicAuthProvider] configuration.
  */
+@KtorDsl
 public class BasicAuthConfig {
     /**
      * Required: The username of the basic auth.
@@ -121,7 +123,7 @@ public class BasicAuthProvider(
         return true
     }
 
-    override suspend fun addRequestHeaders(request: HttpRequestBuilder) {
+    override suspend fun addRequestHeaders(request: HttpRequestBuilder, authHeader: HttpAuthHeader?) {
         val credentials = tokensHolder.loadToken() ?: return
         request.headers[HttpHeaders.Authorization] = constructBasicAuthValue(credentials)
     }

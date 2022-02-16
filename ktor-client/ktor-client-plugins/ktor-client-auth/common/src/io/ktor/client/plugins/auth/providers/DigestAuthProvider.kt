@@ -20,7 +20,7 @@ import kotlinx.atomicfu.*
 public fun Auth.digest(block: DigestAuthConfig.() -> Unit) {
     val config = DigestAuthConfig().apply(block)
     with(config) {
-        providers += DigestAuthProvider(_credentials, realm, algorithmName)
+        this@digest.providers += DigestAuthProvider(_credentials, realm, algorithmName)
     }
 }
 
@@ -28,6 +28,7 @@ public fun Auth.digest(block: DigestAuthConfig.() -> Unit) {
  * [DigestAuthProvider] configuration.
  */
 @Suppress("KDocMissingDocumentation")
+@KtorDsl
 public class DigestAuthConfig {
 
     public var algorithmName: String = "MD5"
@@ -119,9 +120,7 @@ public class DigestAuthProvider(
 
     @Suppress("DEPRECATION")
     override fun isApplicable(auth: HttpAuthHeader): Boolean {
-        if (auth !is HttpAuthHeader.Parameterized ||
-            auth.authScheme != AuthScheme.Digest
-        ) return false
+        if (auth !is HttpAuthHeader.Parameterized || auth.authScheme != AuthScheme.Digest) return false
 
         val newNonce = auth.parameter("nonce") ?: return false
         val newQop = auth.parameter("qop")
@@ -140,7 +139,7 @@ public class DigestAuthProvider(
     }
 
     @Suppress("DEPRECATION")
-    override suspend fun addRequestHeaders(request: HttpRequestBuilder) {
+    override suspend fun addRequestHeaders(request: HttpRequestBuilder, authHeader: HttpAuthHeader?) {
         val nonceCount = requestCounter.incrementAndGet()
         val methodName = request.method.value.uppercase()
         val url = URLBuilder().takeFrom(request.url).build()
@@ -161,7 +160,7 @@ public class DigestAuthProvider(
         }
 
         val token = makeDigest(tokenSequence.joinToString(":"))
-        val realm = realm ?: request.attributes.getOrNull(AuthHeaderAttribute)?.let { auth ->
+        val realm = realm ?: authHeader?.let { auth ->
             (auth as? HttpAuthHeader.Parameterized)?.parameter("realm")
         }
 

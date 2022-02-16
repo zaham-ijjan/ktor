@@ -16,7 +16,6 @@ import io.netty.handler.codec.http.*
 import io.netty.util.concurrent.*
 import kotlinx.coroutines.*
 import java.io.*
-import java.lang.ref.*
 import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
@@ -44,9 +43,9 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
-    private lateinit var myInProgress: WeakReference<AtomicLong>
+    private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
 
-    private val lastContentFlag: AtomicBoolean = AtomicBoolean(false)
+    private lateinit var myInProgress: WeakReference<AtomicLong>
 
     @OptIn(InternalAPI::class)
     override fun channelActive(context: ChannelHandlerContext) {
@@ -56,14 +55,10 @@ internal class NettyHttp1Handler(
         myInProgress = WeakReference(p)
         inProgressArray[myConnectionNumber] = p
 
-        val responseQueue: Queue<NettyApplicationCall> = ArrayDeque()
-
-        val requestBodyHandler = RequestBodyHandler(context, responseQueue)
+        val requestBodyHandler = RequestBodyHandler(context)
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
-            responseQueue,
-            myInProgress,
             lastContentFlag
         )
 
@@ -75,10 +70,17 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
+        if(message is LastHttpContent) {
+            lastContentFlag.set(true)
+        }
+
         if (message is HttpRequest) {
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
 
+            if(!message.isValid()) {
+                lastContentFlag.set(true)
+            }
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
@@ -105,7 +107,6 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
-        println("channelReadComplete")
         channelReadComplete.incrementAndGet()
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
@@ -148,9 +149,7 @@ internal class NettyHttp1Handler(
         return when (message) {
             is HttpContent -> {
                 val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)
-                bodyHandler.newChannel().also {
-                    bodyHandler.channelRead(context, message)
-                }
+                bodyHandler.newChannel().also { bodyHandler.channelRead(context, message) }
             }
             else -> {
                 val bodyHandler = context.pipeline().get(RequestBodyHandler::class.java)

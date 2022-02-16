@@ -20,51 +20,54 @@ import java.io.*
  * A basic plugin configuration for the application served from the filesPath folder
  * with index.html as a default file:
  *
+ * ```
  * install(SinglePageApplication) {
  *   filesPath = "application/project_path"
  * }
+ * ```
  */
-public val SinglePageApplication: ApplicationPlugin<Application, SpaConfiguration, PluginInstance> = createApplicationPlugin(
-    "SinglePage",
-    { SpaConfiguration() }
-) {
-    val defaultPage: String = pluginConfig.defaultPage
-    val applicationRoute: String = pluginConfig.applicationRoute
-    val filesPath: String = pluginConfig.filesPath
-    val ignoredFiles: MutableList<(String) -> Boolean> = pluginConfig.ignoredFiles
-    val usePackageNames: Boolean = pluginConfig.useResources
+public val SinglePageApplication: ApplicationPlugin<Application, SPAConfig, PluginInstance> =
+    createApplicationPlugin(
+        "SinglePageApplication",
+        { SPAConfig() }
+    ) {
+        val defaultPage: String = pluginConfig.defaultPage
+        val applicationRoute: String = pluginConfig.applicationRoute
+        val filesPath: String = pluginConfig.filesPath
+        val ignoredFiles: MutableList<(String) -> Boolean> = pluginConfig.ignoredFiles
+        val usePackageNames: Boolean = pluginConfig.useResources
 
-    fun isUriStartWith(uri: String) =
-        uri.startsWith(applicationRoute) || uri.startsWith("/$applicationRoute")
+        fun isUriStartWith(uri: String) =
+            uri.startsWith(applicationRoute) || uri.startsWith("/$applicationRoute")
 
-    application.routing {
-        static(applicationRoute) {
-            if (usePackageNames) {
-                resources(filesPath)
-                defaultResource(defaultPage, filesPath)
-            } else {
-                staticRootFolder = File(filesPath)
-                files(".")
-                default(defaultPage)
+        application.routing {
+            static(applicationRoute) {
+                if (usePackageNames) {
+                    resources(filesPath)
+                    defaultResource(defaultPage, filesPath)
+                } else {
+                    staticRootFolder = File(filesPath)
+                    files(".")
+                    default(defaultPage)
+                }
+            }
+        }
+
+        onCall { call ->
+            val requestUrl = call.request.uri
+
+            if (!isUriStartWith(requestUrl)) return@onCall
+
+            if (ignoredFiles.firstOrNull { it.invoke(requestUrl) } != null) {
+                call.respond(HttpStatusCode.Forbidden)
             }
         }
     }
 
-    onCall { call ->
-        val requestUrl = call.request.uri
-
-        if (!isUriStartWith(requestUrl)) return@onCall
-
-        if (ignoredFiles.firstOrNull { it.invoke(requestUrl) } != null) {
-            call.respond(HttpStatusCode.Forbidden)
-        }
-    }
-}
-
 /**
  * Configuration for the [SinglePageApplication] plugin
  */
-public class SpaConfiguration(
+public class SPAConfig(
     /**
      * The default name of a file or resource to serve when [applicationRoute] is requested
      */
@@ -97,7 +100,7 @@ public class SpaConfiguration(
  * Registers a [block] in [ignoredFiles]
  * [block] returns true if [path] should be ignored.
  */
-public fun SpaConfiguration.ignoreFiles(block: (path: String) -> Boolean) {
+public fun SPAConfig.ignoreFiles(block: (path: String) -> Boolean) {
     ignoredFiles += block
 }
 
@@ -105,7 +108,7 @@ public fun SpaConfiguration.ignoreFiles(block: (path: String) -> Boolean) {
  * Creates an application configuration for the Angular project.
  * Resources will be shared from the filesPath directory. The root file is index.html
  */
-public fun SpaConfiguration.angular(filesPath: String) {
+public fun SPAConfig.angular(filesPath: String) {
     this.filesPath = filesPath
 }
 
@@ -113,7 +116,7 @@ public fun SpaConfiguration.angular(filesPath: String) {
  * Creates an application configuration for the React project.
  * Resources will be shared from the filesPath directory. The root file is index.html
  */
-public fun SpaConfiguration.react(filesPath: String) {
+public fun SPAConfig.react(filesPath: String) {
     this.filesPath = filesPath
 }
 
@@ -121,7 +124,7 @@ public fun SpaConfiguration.react(filesPath: String) {
  * Creates an application configuration for the Vue project.
  * Resources will be shared from the filesPath directory. The root file is index.html
  */
-public fun SpaConfiguration.vue(filesPath: String) {
+public fun SPAConfig.vue(filesPath: String) {
     this.filesPath = filesPath
 }
 
@@ -129,7 +132,7 @@ public fun SpaConfiguration.vue(filesPath: String) {
  * Creates an application configuration for the Ember project.
  * Resources will be shared from the filesPath directory. The root file is index.html
  */
-public fun SpaConfiguration.ember(filesPath: String) {
+public fun SPAConfig.ember(filesPath: String) {
     this.filesPath = filesPath
 }
 
@@ -137,6 +140,6 @@ public fun SpaConfiguration.ember(filesPath: String) {
  * Creates an application configuration for the Backbone project.
  * Resources will be shared from the filesPath directory. The root file is index.html
  */
-public fun SpaConfiguration.backbone(filesPath: String) {
+public fun SPAConfig.backbone(filesPath: String) {
     this.filesPath = filesPath
 }

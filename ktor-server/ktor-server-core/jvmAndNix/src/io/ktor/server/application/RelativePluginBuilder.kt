@@ -4,6 +4,7 @@
 
 package io.ktor.server.application
 
+import io.ktor.http.content.*
 import io.ktor.server.request.*
 import io.ktor.util.pipeline.*
 
@@ -66,7 +67,7 @@ public sealed class RelativePluginBuilder<PluginConfig : Any>(
                     }
 
                     pipeline.intercept(currentPhase) {
-                        contextInit(currentPlugin.pluginConfig, this).block(call, subject)
+                        contextInit(this@RelativePluginBuilder.currentPlugin.pluginConfig, this).block(call, subject)
                     }
                 }
             )
@@ -115,14 +116,13 @@ public sealed class RelativePluginBuilder<PluginConfig : Any>(
 
     override val onCallRespond: OnCallRespond<PluginConfig> = object : OnCallRespond<PluginConfig> {
         override fun afterTransform(
-            block: suspend OnCallRespondAfterTransformContext<PluginConfig>.(ApplicationCall, Any) -> Unit
+            block: suspend OnCallRespondAfterTransformContext<PluginConfig>.(ApplicationCall, OutgoingContent) -> Unit
         ) {
             this@RelativePluginBuilder.insertToPhaseRelativelyWithMessage(
                 this@RelativePluginBuilder.currentPlugin.afterResponseInterceptions,
                 this@RelativePluginBuilder.otherPlugins.map { it.afterResponseInterceptions },
                 ::OnCallRespondAfterTransformContext,
-                block
-            )
+            ) { call, body -> block(call, body as OutgoingContent) }
         }
     }
 }

@@ -4,12 +4,12 @@
 
 package io.ktor.server.application
 
+import io.ktor.http.content.*
 import io.ktor.server.application.debug.*
 import io.ktor.server.config.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.util.*
-import io.ktor.util.collections.*
 import io.ktor.util.debug.*
 import io.ktor.util.pipeline.*
 import kotlin.random.*
@@ -22,6 +22,9 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
     internal val key: AttributeKey<PluginInstance>
 ) : PluginBuilder<PluginConfig> {
 
+    /**
+     * Configuration of current plugin.
+     */
     public abstract val pluginConfig: PluginConfig
 
     /**
@@ -47,8 +50,6 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
     internal val onResponseInterceptions: MutableList<ResponseInterception> = mutableListOf()
 
     internal val afterResponseInterceptions: MutableList<ResponseInterception> = mutableListOf()
-
-    internal val pipelineHandlers: MutableList<PipelineHandler> = mutableListOf()
 
     internal val hooks: MutableList<HookHandler<*>> = mutableListOf()
 
@@ -102,44 +103,6 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
     }
 
     /**
-     * Executes specific actions after all [targetPlugins] are executed.
-     *
-     * @param targetPlugins Plugins that need to be executed before your current [ApplicationPluginBuilder].
-     * @param build Defines the code of your plugin that needs to be executed after [targetPlugins].
-     *
-     * Note: you can define multiple actions inside a [build] callback for multiple stages of handling an HTTP call
-     * (such as [onCall], [onCallRespond], and so on). These actions are executed right after all actions defined
-     * by the given [plugin] are already executed in the same stage.
-     **/
-    public fun after(
-        vararg targetPlugins: Plugin<*, *, PluginInstance>,
-        build: AfterPluginsBuilder<PluginConfig>.() -> Unit
-    ) {
-        pipelineHandlers.add { pipeline ->
-            AfterPluginsBuilder(this, targetPlugins.map { pipeline.plugin(it).builder }).build()
-        }
-    }
-
-    /**
-     * Executes specific actions before all [targetPlugins] are executed.
-     *
-     * @param targetPlugins Plugins that need to be executed after your current [ApplicationPluginBuilder].
-     * @param build Defines the code of your plugin that needs to be executed before [targetPlugins].
-     *
-     * Note: you can define multiple actions inside a [build] callback for multiple stages of handling an HTTP call
-     * (such as [onCall], [onCallRespond], and so on) and each of these actions will be executed right before all actions defined
-     * by the given [targetPlugins] were already executed in the same stage.
-     **/
-    public fun before(
-        vararg targetPlugins: Plugin<*, *, PluginInstance>,
-        build: BeforePluginsBuilder<PluginConfig>.() -> Unit
-    ) {
-        pipelineHandlers.add { pipeline ->
-            BeforePluginsBuilder(this, targetPlugins.map { pipeline.plugin(it).builder }).build()
-        }
-    }
-
-    /**
      * Specifies a [handler] for a specific [hook]. A [hook] can be a specific place in time or event during the request
      * processing like application shutdown, exception during call processing, etc.
      *
@@ -163,7 +126,7 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
 
     public override val onCallRespond: OnCallRespond<PluginConfig> = object : OnCallRespond<PluginConfig> {
         override fun afterTransform(
-            block: suspend OnCallRespondAfterTransformContext<PluginConfig>.(ApplicationCall, Any) -> Unit
+            block: suspend OnCallRespondAfterTransformContext<PluginConfig>.(ApplicationCall, OutgoingContent) -> Unit
         ) {
             val plugin = this@ApplicationPluginBuilder
 
@@ -171,9 +134,8 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
                 plugin.afterResponseInterceptions,
                 ApplicationSendPipeline.After,
                 PHASE_ON_CALL_RESPOND_AFTER,
-                ::OnCallRespondAfterTransformContext,
-                block
-            )
+                ::OnCallRespondAfterTransformContext
+            ) { call, body -> block(call, body as OutgoingContent) }
         }
     }
 
@@ -190,6 +152,8 @@ public abstract class ApplicationPluginBuilder<PluginConfig : Any> internal cons
                 action = { pipeline ->
                     pipeline.intercept(phase) {
                         // Information about the plugin name is needed for the Intellij Idea debugger.
+                        val key = this@ApplicationPluginBuilder.key
+                        val pluginConfig = this@ApplicationPluginBuilder.pluginConfig
                         addToContextInDebugMode(PluginName(key.name)) {
                             ijDebugReportHandlerStarted(pluginName = key.name, handler = handlerName)
 

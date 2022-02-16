@@ -102,11 +102,18 @@ class TestApplicationEngine(
     }
 
     override suspend fun resolvedConnectors(): List<EngineConnectorConfig> {
-        return listOf(object : EngineConnectorConfig {
-            override val type: ConnectorType = ConnectorType.HTTP
-            override val host: String = environment.connectors.firstOrNull()?.host ?: "localhost"
-            override val port: Int = environment.connectors.firstOrNull()?.port ?: 80
-        })
+        return listOf(
+            object : EngineConnectorConfig {
+                override val type: ConnectorType = ConnectorType.HTTP
+                override val host: String = environment.connectors.firstOrNull()?.host ?: "localhost"
+                override val port: Int = environment.connectors.firstOrNull()?.port ?: 80
+            },
+            object : EngineConnectorConfig {
+                override val type: ConnectorType = ConnectorType.HTTPS
+                override val host: String = environment.connectors.firstOrNull()?.host ?: "localhost"
+                override val port: Int = environment.connectors.firstOrNull()?.port ?: 443
+            }
+        )
     }
 
     override fun start(wait: Boolean): ApplicationEngine {
@@ -162,7 +169,7 @@ class TestApplicationEngine(
     /**
      * Make a test request
      */
-    @OptIn(InternalAPI::class, kotlinx.coroutines.DelicateCoroutinesApi::class)
+    @OptIn(DelicateCoroutinesApi::class)
     fun handleRequest(
         closeRequest: Boolean = true,
         setup: TestApplicationRequest.() -> Unit
