@@ -14,6 +14,7 @@ import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
 import java.io.*
+import java.util.concurrent.atomic.*
 import java.lang.ref.*
 import java.util.*
 import java.util.concurrent.atomic.*
@@ -28,6 +29,7 @@ internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
     private var writersCount: AtomicLong,
+    private var lastContentFlag: AtomicBoolean,
     private var myInProgress: WeakReference<AtomicLong>
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
@@ -41,9 +43,10 @@ internal class NettyResponsePipeline constructor(
     fun markReadingStopped() {
         isReadComplete.set(true)
 
-        if (needsFlush.get() && writersCount.get() == 0L) {
-            needsFlush.set(false)
+        val currentWritersCount = writersCount.get()
+        if (needsFlush.get() && currentWritersCount == 0L) {
             context.flush()
+            needsFlush.set(false)
             flushes.incrementAndGet()
         }
     }
@@ -92,8 +95,8 @@ internal class NettyResponsePipeline constructor(
         call.isRaw = true
 
         context.flush()
-        flushes.incrementAndGet()
         needsFlush.set(false)
+        flushes.incrementAndGet()
         return future
     }
 
@@ -134,8 +137,8 @@ internal class NettyResponsePipeline constructor(
 
     fun close(lastFuture: ChannelFuture) {
         context.flush()
-        flushes.incrementAndGet()
         needsFlush.set(false)
+        flushes.incrementAndGet()
         lastFuture.addListener {
             context.close()
         }
@@ -143,11 +146,10 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            val writersCountValue = writersCount.get()
-            if (needsFlush.get() && isReadComplete.get() && writersCountValue == 0L) {
+            if (needsFlush.get() && isReadComplete.get() && writersCount.get() == 0L) {
                 context.flush()
-                flushes.incrementAndGet()
                 needsFlush.set(false)
+                flushes.incrementAndGet()
             }
         }
     }
@@ -159,11 +161,13 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            val writersCountValue = writersCount.get()
-            if (isReadComplete.get() && writersCountValue == 0L) {
+            val currentWritersCount = writersCount.get()
+            if (isReadComplete.get() && (currentWritersCount == 0L
+                    || (!lastContentFlag.get() && currentWritersCount == 1L))
+            ) {
                 val f = context.writeAndFlush(responseMessage)
-                flushes.incrementAndGet()
                 needsFlush.set(false)
+                flushes.incrementAndGet()
                 f
             } else {
                 val f = context.write(responseMessage)
@@ -289,8 +293,8 @@ internal class NettyResponsePipeline constructor(
                 if (flushCondition.invoke(channel, unflushedBytes)) {
                     context.read()
                     val future = context.writeAndFlush(message)
+                    needsFlush.set(false)
                     flushes.incrementAndGet()
-                    needsFlush.set(true)
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0

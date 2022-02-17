@@ -20,6 +20,7 @@ import java.io.*
 import java.lang.ref.*
 import java.util.*
 import java.util.concurrent.atomic.*
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.*
 
@@ -48,6 +49,8 @@ internal class NettyHttp1Handler(
 
     private var writersCount: AtomicLong = AtomicLong()
 
+    private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
+
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
     @OptIn(InternalAPI::class)
@@ -74,10 +77,17 @@ internal class NettyHttp1Handler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
+        if (message is LastHttpContent) {
+            lastContentFlag.set(true)
+        }
+
         if (message is HttpRequest) {
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
 
+            if (!message.isValid()) {
+                lastContentFlag.set(true)
+            }
             writersCount.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {

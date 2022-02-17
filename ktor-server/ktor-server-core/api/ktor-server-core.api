@@ -15,6 +15,7 @@ public abstract interface class io/ktor/server/application/ApplicationCall {
 }
 
 public final class io/ktor/server/application/ApplicationCallKt {
+	public static final fun getReceiveType (Lio/ktor/server/application/ApplicationCall;)Lio/ktor/util/reflect/TypeInfo;
 	public static final fun isHandled (Lio/ktor/server/application/ApplicationCall;)Z
 }
 
@@ -71,19 +72,6 @@ public final class io/ktor/server/application/ApplicationKt {
 }
 
 public abstract interface class io/ktor/server/application/ApplicationPlugin : io/ktor/server/application/Plugin {
-}
-
-public abstract class io/ktor/server/application/ApplicationPluginBuilder : io/ktor/server/application/PluginBuilder {
-	public final fun getApplicationConfig ()Lio/ktor/server/config/ApplicationConfig;
-	public final fun getEnvironment ()Lio/ktor/server/application/ApplicationEnvironment;
-	public fun getOnCallRespond ()Lio/ktor/server/application/OnCallRespond;
-	public abstract fun getPluginConfig ()Ljava/lang/Object;
-	public final fun on (Lio/ktor/server/application/Hook;Ljava/lang/Object;)V
-	public fun onCall (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallReceive (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallReceive (Lkotlin/jvm/functions/Function4;)V
-	public fun onCallRespond (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallRespond (Lkotlin/jvm/functions/Function4;)V
 }
 
 public final class io/ktor/server/application/ApplicationPluginKt {
@@ -173,34 +161,21 @@ public abstract interface class io/ktor/server/application/Plugin {
 	public abstract fun install (Lio/ktor/util/pipeline/Pipeline;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
 }
 
-public abstract interface class io/ktor/server/application/PluginBuilder {
+public abstract class io/ktor/server/application/PluginBuilder {
 	public abstract fun getApplication ()Lio/ktor/server/application/Application;
-	public abstract fun getOnCallRespond ()Lio/ktor/server/application/OnCallRespond;
-	public abstract fun onCall (Lkotlin/jvm/functions/Function3;)V
-	public abstract fun onCallReceive (Lkotlin/jvm/functions/Function3;)V
-	public abstract fun onCallReceive (Lkotlin/jvm/functions/Function4;)V
-	public abstract fun onCallRespond (Lkotlin/jvm/functions/Function3;)V
-	public abstract fun onCallRespond (Lkotlin/jvm/functions/Function4;)V
-}
-
-public final class io/ktor/server/application/PluginBuilder$DefaultImpls {
-	public static fun onCallReceive (Lio/ktor/server/application/PluginBuilder;Lkotlin/jvm/functions/Function3;)V
-	public static fun onCallRespond (Lio/ktor/server/application/PluginBuilder;Lkotlin/jvm/functions/Function3;)V
+	public final fun getApplicationConfig ()Lio/ktor/server/config/ApplicationConfig;
+	public final fun getEnvironment ()Lio/ktor/server/application/ApplicationEnvironment;
+	public final fun getOnCallRespond ()Lio/ktor/server/application/OnCallRespond;
+	public abstract fun getPluginConfig ()Ljava/lang/Object;
+	public final fun on (Lio/ktor/server/application/Hook;Ljava/lang/Object;)V
+	public final fun onCall (Lkotlin/jvm/functions/Function3;)V
+	public final fun onCallReceive (Lkotlin/jvm/functions/Function3;)V
+	public final fun onCallReceive (Lkotlin/jvm/functions/Function4;)V
+	public final fun onCallRespond (Lkotlin/jvm/functions/Function3;)V
+	public final fun onCallRespond (Lkotlin/jvm/functions/Function4;)V
 }
 
 public final class io/ktor/server/application/PluginInstance {
-}
-
-public abstract class io/ktor/server/application/RelativePluginBuilder : io/ktor/server/application/PluginBuilder {
-	public synthetic fun <init> (Lio/ktor/server/application/ApplicationPluginBuilder;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun getOnCallRespond ()Lio/ktor/server/application/OnCallRespond;
-	protected abstract fun insertPhase (Lio/ktor/util/pipeline/Pipeline;Lio/ktor/util/pipeline/PipelinePhase;Lio/ktor/util/pipeline/PipelinePhase;)V
-	public fun onCall (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallReceive (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallReceive (Lkotlin/jvm/functions/Function4;)V
-	public fun onCallRespond (Lkotlin/jvm/functions/Function3;)V
-	public fun onCallRespond (Lkotlin/jvm/functions/Function4;)V
-	protected abstract fun selectPhase (Ljava/util/List;)Lio/ktor/util/pipeline/PipelinePhase;
 }
 
 public abstract interface class io/ktor/server/application/RouteScopedPlugin : io/ktor/server/application/Plugin {
@@ -513,12 +488,6 @@ public final class io/ktor/server/request/ApplicationReceivePipeline$Phases {
 	public final fun getTransform ()Lio/ktor/util/pipeline/PipelinePhase;
 }
 
-public final class io/ktor/server/request/ApplicationReceiveRequest {
-	public fun <init> (Lio/ktor/util/reflect/TypeInfo;Ljava/lang/Object;)V
-	public final fun getTypeInfo ()Lio/ktor/util/reflect/TypeInfo;
-	public final fun getValue ()Ljava/lang/Object;
-}
-
 public abstract interface class io/ktor/server/request/ApplicationRequest {
 	public abstract fun getCall ()Lio/ktor/server/application/ApplicationCall;
 	public abstract fun getCookies ()Lio/ktor/server/request/RequestCookies;
@@ -819,18 +788,8 @@ public final class io/ktor/server/routing/HttpMethodRouteSelector : io/ktor/serv
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/ktor/server/routing/IgnoreTrailingSlash {
-	public static final field Plugin Lio/ktor/server/routing/IgnoreTrailingSlash$Plugin;
-}
-
-public final class io/ktor/server/routing/IgnoreTrailingSlash$Configuration {
-	public fun <init> ()V
-}
-
-public final class io/ktor/server/routing/IgnoreTrailingSlash$Plugin : io/ktor/server/application/ApplicationPlugin {
-	public fun getKey ()Lio/ktor/util/AttributeKey;
-	public fun install (Lio/ktor/server/application/ApplicationCallPipeline;Lkotlin/jvm/functions/Function1;)Lio/ktor/server/routing/IgnoreTrailingSlash;
-	public synthetic fun install (Lio/ktor/util/pipeline/Pipeline;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
+public final class io/ktor/server/routing/IgnoreTrailingSlashKt {
+	public static final fun getIgnoreTrailingSlash ()Lio/ktor/server/application/ApplicationPlugin;
 }
 
 public final class io/ktor/server/routing/LocalPortRouteSelector : io/ktor/server/routing/RouteSelector {

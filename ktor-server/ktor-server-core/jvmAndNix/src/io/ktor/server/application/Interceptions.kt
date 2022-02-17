@@ -4,7 +4,6 @@
 
 package io.ktor.server.application
 
-import io.ktor.server.request.*
 import io.ktor.util.pipeline.*
 
 /**
@@ -24,7 +23,7 @@ internal typealias CallInterception = Interception<Unit>
 /**
  * An instance of [Interception] for the receive phase, i.e. an [Interception] that takes place inside onCallReceive { ... } handler.
  **/
-internal typealias ReceiveInterception = Interception<ApplicationReceiveRequest>
+internal typealias ReceiveInterception = Interception<Any>
 
 /**
  * An instance of [Interception] for the response phase, i.e. an [Interception] that takes place inside onCallRespond { ... } handler.
