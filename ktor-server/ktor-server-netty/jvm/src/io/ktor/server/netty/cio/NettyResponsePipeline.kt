@@ -24,6 +24,7 @@ private const val UNFLUSHED_LIMIT = 65536
 internal class NettyResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     override val coroutineContext: CoroutineContext,
+    private var writersCount: AtomicLong,
     private var lastContentFlag: AtomicBoolean
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
@@ -37,9 +38,10 @@ internal class NettyResponsePipeline constructor(
     fun markReadingStopped() {
         isReadComplete.set(true)
 
-        if (needsFlush.get() && lastContentFlag.get()) {
-            needsFlush.set(false)
+        val currentWritersCount = writersCount.get()
+        if (needsFlush.get() && currentWritersCount == 0L) {
             context.flush()
+            needsFlush.set(false)
         }
     }
 
@@ -102,8 +104,10 @@ internal class NettyResponsePipeline constructor(
         val future = if (lastMessage != null) {
             val f = context.write(lastMessage)
             needsFlush.set(true)
+            writersCount.decrementAndGet()
             f
         } else {
+            writersCount.decrementAndGet()
             null
         }
 
@@ -134,9 +138,9 @@ internal class NettyResponsePipeline constructor(
 
     private fun scheduleFlush() {
         context.executor().execute {
-            if (needsFlush.get() && isReadComplete.get() && lastContentFlag.get()) {
-                needsFlush.set(false)
+            if (needsFlush.get() && isReadComplete.get() && writersCount.get() == 0L) {
                 context.flush()
+                needsFlush.set(false)
             }
         }
     }
@@ -148,7 +152,8 @@ internal class NettyResponsePipeline constructor(
         val requestMessageFuture = if (response.isUpgradeResponse()) {
             processUpgrade(call, responseMessage)
         } else {
-            if (isReadComplete.get() && lastContentFlag.get()) {
+            val currentWritersCount = writersCount.get()
+            if (isReadComplete.get() && (currentWritersCount == 0L || (!lastContentFlag.get() && currentWritersCount == 1L))) {
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 f
@@ -271,7 +276,7 @@ internal class NettyResponsePipeline constructor(
                 if (flushCondition.invoke(channel, unflushedBytes)) {
                     context.read()
                     val future = context.writeAndFlush(message)
-                    needsFlush.set(true)
+                    needsFlush.set(false)
                     lastFuture = future
                     future.suspendAwait()
                     unflushedBytes = 0

@@ -37,6 +37,8 @@ internal class NettyHttp1Handler(
 
     private var currentRequest: ByteReadChannel? = null
 
+    private var writersCount: AtomicLong = AtomicLong()
+
     private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
 
     @OptIn(InternalAPI::class)
@@ -45,6 +47,7 @@ internal class NettyHttp1Handler(
         responseWriter = NettyResponsePipeline(
             context,
             coroutineContext,
+            writersCount,
             lastContentFlag
         )
 
@@ -64,6 +67,7 @@ internal class NettyHttp1Handler(
             if(!message.isValid()) {
                 lastContentFlag.set(true)
             }
+            writersCount.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false

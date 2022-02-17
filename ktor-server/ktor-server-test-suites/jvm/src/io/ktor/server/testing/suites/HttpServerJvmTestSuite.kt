@@ -16,8 +16,10 @@ import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import io.ktor.utils.io.streams.*
 import kotlinx.coroutines.*
+import java.io.*
 import java.net.*
 import java.nio.*
+import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 import kotlin.test.*
 import kotlin.text.toByteArray
@@ -26,6 +28,125 @@ import kotlin.time.Duration.Companion.seconds
 abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguration : ApplicationEngine.Configuration>(
     hostFactory: ApplicationEngineFactory<TEngine, TConfiguration>
 ) : EngineTestBase<TEngine, TConfiguration>(hostFactory) {
+
+    @Test
+    fun testPipelining() {
+        val lastHandler = CompletableDeferred<Unit>()
+
+        createAndStartServer {
+            get("/") {
+                val id = call.parameters["d"]!!.toInt()
+                if (id == 16) {
+                    lastHandler.complete(Unit)
+                    delay(3000)
+                }
+                call.respondText("Response for $id\n")
+            }
+        }
+
+        val s = Socket()
+        s.tcpNoDelay = true
+
+        val builder = StringBuilder()
+        for (id in 1..15) {
+            builder.append("GET /?d=$id HTTP/1.1\r\n")
+            builder.append("Host: localhost\r\n")
+            builder.append("Connection: keep-alive\r\n")
+            builder.append("\r\n")
+        }
+        builder.append("GET /?d=16 HTTP/1.1\r\n")
+        builder.append("Host: localhost\r\n")
+        builder.append("Connection: close\r\n")
+        builder.append("\r\n")
+
+        val impudent = builder.toString().toByteArray()
+
+        s.connect(InetSocketAddress(port))
+        s.use { _ ->
+            s.getOutputStream().apply {
+                write(impudent)
+                flush()
+            }
+
+            runBlocking {
+                val input = s.getInputStream()
+                lastHandler.await()
+
+                assertEquals(input.available(), 0)
+                val responses = getSocketResponses(input)
+                assertEquals(pipelinedResponses, responses)
+            }
+        }
+    }
+
+    @Test
+    fun testPipeliningWithFlushingHeaders() {
+        val lastHandler = CompletableDeferred<Unit>()
+        val processedRequests = AtomicLong()
+
+        createAndStartServer {
+            post("/") {
+                val id = call.parameters["d"]!!.toInt()
+                call.request.receiveChannel().readRemaining()
+
+                if (id < 16 && processedRequests.incrementAndGet() == 15L) {
+                    lastHandler.complete(Unit)
+                }
+                call.respondText("Response for $id\n")
+            }
+        }
+
+        val s = Socket()
+        s.tcpNoDelay = true
+
+        val builder = StringBuilder()
+        for (id in 1..15) {
+            builder.append("POST /?d=$id HTTP/1.1\r\n")
+            builder.append("Host: localhost\r\n")
+            builder.append("Connection: keep-alive\r\n")
+            builder.append("Accept-Charset: UTF-8\r\n")
+            builder.append("Accept: */*\r\n")
+            builder.append("Content-Type: text/plain; charset=UTF-8\r\n")
+            builder.append("content-length: 5\r\n")
+            builder.append("\r\n")
+            builder.append("hello")
+            builder.append("\r\n")
+        }
+        builder.append("POST /?d=16 HTTP/1.1\r\n")
+        builder.append("Host: localhost\r\n")
+        builder.append("Connection: close\r\n")
+        builder.append("Accept-Charset: UTF-8\r\n")
+        builder.append("Accept: */*\r\n")
+        builder.append("Content-Type: text/plain; charset=UTF-8\r\n")
+        builder.append("content-length: 5\r\n")
+        builder.append("\r\n")
+
+        var impudent = builder.toString().toByteArray()
+
+        s.connect(InetSocketAddress(port))
+        s.use {
+            s.getOutputStream().apply {
+                write(impudent)
+                flush()
+            }
+
+            runBlocking {
+                lastHandler.await()
+
+                builder.clear()
+                builder.append("hello")
+                builder.append("\r\n")
+                impudent = builder.toString().toByteArray()
+
+                s.getOutputStream().apply {
+                    write(impudent)
+                    flush()
+                }
+                val responses = getSocketResponses(s.getInputStream())
+                assertEquals(pipelinedResponses, responses)
+            }
+        }
+    }
 
     @Test
     fun testRequestTwiceInOneBufferWithKeepAlive() {
@@ -61,14 +182,7 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                 flush()
             }
 
-            val responses = s.getInputStream().bufferedReader(Charsets.ISO_8859_1).lineSequence()
-                .filterNot { line ->
-                    line.startsWith("Date") || line.startsWith("Server") ||
-                        line.startsWith("Content-") || line.toIntOrNull() != null ||
-                        line.isBlank() || line.startsWith("Connection") || line.startsWith("Keep-Alive")
-                }
-                .map { it.trim() }
-                .joinToString(separator = "\n").replace("200 OK", "200")
+            val responses =getSocketResponses(s.getInputStream())
 
             assertEquals(
                 """
@@ -307,4 +421,50 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
             }
         }
     }
+
+    private val pipelinedResponses = """
+                    HTTP/1.1 200
+                    Response for 1
+                    HTTP/1.1 200
+                    Response for 2
+                    HTTP/1.1 200
+                    Response for 3
+                    HTTP/1.1 200
+                    Response for 4
+                    HTTP/1.1 200
+                    Response for 5
+                    HTTP/1.1 200
+                    Response for 6
+                    HTTP/1.1 200
+                    Response for 7
+                    HTTP/1.1 200
+                    Response for 8
+                    HTTP/1.1 200
+                    Response for 9
+                    HTTP/1.1 200
+                    Response for 10
+                    HTTP/1.1 200
+                    Response for 11
+                    HTTP/1.1 200
+                    Response for 12
+                    HTTP/1.1 200
+                    Response for 13
+                    HTTP/1.1 200
+                    Response for 14
+                    HTTP/1.1 200
+                    Response for 15
+                    HTTP/1.1 200
+                    Response for 16
+                """
+        .trimIndent().replace("\r\n", "\n")
+
+    private fun getSocketResponses(input: InputStream) =
+        input.bufferedReader(Charsets.ISO_8859_1).lineSequence()
+            .filterNot { line ->
+                line.startsWith("Date") || line.startsWith("Server") ||
+                    line.startsWith("Content-") || line.toIntOrNull() != null ||
+                    line.isBlank() || line.startsWith("Connection") || line.startsWith("Keep-Alive")
+            }
+            .map { it.trim() }
+            .joinToString(separator = "\n").replace("200 OK", "200")
 }
