@@ -66,6 +66,7 @@ internal class NettyHttp1Handler(
             context,
             coroutineContext,
             writersCount,
+            lastContentFlag,
             myInProgress
         )
 
