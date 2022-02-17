@@ -14,7 +14,6 @@ import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
 import java.io.*
-import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 
@@ -153,7 +152,9 @@ internal class NettyResponsePipeline constructor(
             processUpgrade(call, responseMessage)
         } else {
             val currentWritersCount = writersCount.get()
-            if (isReadComplete.get() && (currentWritersCount == 0L || (!lastContentFlag.get() && currentWritersCount == 1L))) {
+            if (isReadComplete.get() && (currentWritersCount == 0L
+                    || (!lastContentFlag.get() && currentWritersCount == 1L))
+            ) {
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 f

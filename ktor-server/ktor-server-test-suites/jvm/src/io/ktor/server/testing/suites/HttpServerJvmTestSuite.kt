@@ -182,7 +182,7 @@ abstract class HttpServerJvmTestSuite<TEngine : ApplicationEngine, TConfiguratio
                 flush()
             }
 
-            val responses =getSocketResponses(s.getInputStream())
+            val responses = getSocketResponses(s.getInputStream())
 
             assertEquals(
                 """
