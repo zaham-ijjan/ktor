@@ -88,7 +88,7 @@ internal class NettyHttp1Handler(
 
             if (!message.isValid()) {
                 lastContentFlag.set(true)
-            } else {
+            } else if (message !is LastHttpContent) {
                 lastContentFlag.set(false)
             }
             writersCount.incrementAndGet()
