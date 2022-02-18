@@ -73,7 +73,10 @@ public class NettyApplicationEngine(
                 val currentRequests = requests.getAndSet(0)
                 val currentFlushes = flushes.getAndSet(0)
                 val currentChannelReadComplete = channelReadComplete.getAndSet(0)
+                val currentHeaderFlushes = headerFlushes.getAndSet(0)
 
+                println("Header flushes = $currentFlushes")
+                
                 if (currentFlushes == 0L) {
                     environment.log.error("Requests, flushes : $currentRequests, 0")
                 } else {

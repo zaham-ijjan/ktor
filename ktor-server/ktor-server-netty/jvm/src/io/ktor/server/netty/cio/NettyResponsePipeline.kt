@@ -14,15 +14,14 @@ import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.*
 import kotlinx.coroutines.*
 import java.io.*
-import java.util.concurrent.atomic.*
 import java.lang.ref.*
-import java.util.*
 import java.util.concurrent.atomic.*
 import kotlin.coroutines.*
 
 private const val UNFLUSHED_LIMIT = 65536
 
 public val flushes: AtomicLong = AtomicLong()
+public val headerFlushes: AtomicLong = AtomicLong()
 
 @OptIn(InternalAPI::class, DelicateCoroutinesApi::class)
 internal class NettyResponsePipeline constructor(
@@ -112,6 +111,7 @@ internal class NettyResponsePipeline constructor(
             val f = context.write(lastMessage)
             needsFlush.set(true)
             writersCount.decrementAndGet()
+            headerFlushes.incrementAndGet()
             f
         } else {
             writersCount.decrementAndGet()
