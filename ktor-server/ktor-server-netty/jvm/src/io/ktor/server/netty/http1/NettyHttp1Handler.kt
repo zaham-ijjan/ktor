@@ -86,9 +86,7 @@ internal class NettyHttp1Handler(
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
 
-            if (!message.isValid()) {
-                lastContentFlag.set(true)
-            } else if (message !is LastHttpContent) {
+            if (message !is LastHttpContent) {
                 lastContentFlag.set(false)
             }
             writersCount.incrementAndGet()
