@@ -51,6 +51,8 @@ internal class NettyHttp1Handler(
 
     private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
 
+    private val isReadComplete: AtomicBoolean = AtomicBoolean(false)
+
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
     @OptIn(InternalAPI::class)
@@ -67,7 +69,8 @@ internal class NettyHttp1Handler(
             coroutineContext,
             writersCount,
             lastContentFlag,
-            myInProgress
+            myInProgress,
+            isReadComplete
         )
 
         context.pipeline().apply {
@@ -89,7 +92,9 @@ internal class NettyHttp1Handler(
             if (message !is LastHttpContent) {
                 lastContentFlag.set(false)
             }
+            isReadComplete.set(false)
             writersCount.incrementAndGet()
+
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
             skipEmpty = false
@@ -117,6 +122,8 @@ internal class NettyHttp1Handler(
 
     override fun channelReadComplete(context: ChannelHandlerContext?) {
         channelReadComplete.incrementAndGet()
+
+        isReadComplete.set(true)
         responseWriter.markReadingStopped()
         super.channelReadComplete(context)
     }

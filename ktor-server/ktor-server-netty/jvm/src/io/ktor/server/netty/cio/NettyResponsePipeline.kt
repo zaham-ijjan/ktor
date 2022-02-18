@@ -29,19 +29,16 @@ internal class NettyResponsePipeline constructor(
     override val coroutineContext: CoroutineContext,
     private var writersCount: AtomicLong,
     private var lastContentFlag: AtomicBoolean,
-    private var myInProgress: WeakReference<AtomicLong>
+    private var myInProgress: WeakReference<AtomicLong>,
+    private val isReadComplete: AtomicBoolean
 ) : CoroutineScope {
     private val needsFlush: AtomicBoolean = AtomicBoolean(false)
-
-    private val isReadComplete: AtomicBoolean = AtomicBoolean(false)
 
     private var prevCall: ChannelPromise = context.newPromise().also {
         it.setSuccess()
     }
 
     fun markReadingStopped() {
-        isReadComplete.set(true)
-
         val currentWritersCount = writersCount.get()
         if (needsFlush.get() && currentWritersCount == 0L) {
             context.flush()
