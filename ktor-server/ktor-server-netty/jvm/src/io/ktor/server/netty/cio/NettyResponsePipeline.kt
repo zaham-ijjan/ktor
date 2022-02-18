@@ -168,6 +168,7 @@ internal class NettyResponsePipeline constructor(
                 val f = context.writeAndFlush(responseMessage)
                 needsFlush.set(false)
                 flushes.incrementAndGet()
+                headerFlushes.incrementAndGet()
                 f
             } else {
                 val f = context.write(responseMessage)
