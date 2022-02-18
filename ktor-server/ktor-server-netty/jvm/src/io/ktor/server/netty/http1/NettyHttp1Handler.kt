@@ -86,9 +86,9 @@ internal class NettyHttp1Handler(
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
 
-//            if (message !is LastHttpContent) {
-//                lastContentFlag.set(false)
-//            }
+            if (message !is LastHttpContent) {
+                lastContentFlag.set(false)
+            }
             writersCount.incrementAndGet()
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
