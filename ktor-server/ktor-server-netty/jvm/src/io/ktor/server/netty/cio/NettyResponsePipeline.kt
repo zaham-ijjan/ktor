@@ -111,7 +111,6 @@ internal class NettyResponsePipeline constructor(
             val f = context.write(lastMessage)
             needsFlush.set(true)
             writersCount.decrementAndGet()
-            headerFlushes.incrementAndGet()
             f
         } else {
             writersCount.decrementAndGet()
