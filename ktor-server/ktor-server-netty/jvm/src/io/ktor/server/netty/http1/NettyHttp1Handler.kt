@@ -94,7 +94,7 @@ internal class NettyHttp1Handler(
         if (message is HttpRequest) {
             requests.incrementAndGet()
             myInProgress.get()?.incrementAndGet()
-            
+
             if (message !is LastHttpContent) {
                 isCurrentRequestFullyRead.compareAndSet(expect = true, update = false)
             }
