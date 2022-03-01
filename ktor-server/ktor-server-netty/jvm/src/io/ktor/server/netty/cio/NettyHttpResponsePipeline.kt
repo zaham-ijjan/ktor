@@ -21,8 +21,8 @@ import kotlin.coroutines.*
 
 private const val UNFLUSHED_LIMIT = 65536
 
-public val flushes: AtomicLong = AtomicLong()
-public val headerFlushes: AtomicLong = AtomicLong()
+public val flushes: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong()
+public val headerFlushes: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong()
 
 /**
  * Contains methods for handling http request with Netty
@@ -37,7 +37,7 @@ internal class NettyHttpResponsePipeline constructor(
     private val context: ChannelHandlerContext,
     private val httpHandler: NettyHttp1Handler,
     override val coroutineContext: CoroutineContext,
-    private var myInProgress: WeakReference<AtomicLong>,
+    private var myInProgress: WeakReference<java.util.concurrent.atomic.AtomicLong>,
 ) : CoroutineScope {
     /**
      * True if there is unflushed written data in channel

@@ -50,17 +50,17 @@ internal class NettyHttp1Handler(
     /**
      *  Represents current number of processing requests
      */
-    internal val activeRequests: AtomicLong = atomic(0L)
+    internal val activeRequests: kotlinx.atomicfu.AtomicLong = atomic(0L)
 
     /**
      * True if current request's last http content is read, false otherwise.
      */
-    internal val isCurrentRequestFullyRead: AtomicBoolean = atomic(false)
+    internal val isCurrentRequestFullyRead: kotlinx.atomicfu.AtomicBoolean = atomic(false)
 
     /**
      * True if [channelReadComplete] was invoked for the current request, false otherwise
      */
-    internal val isChannelReadCompleted: AtomicBoolean = atomic(false)
+    internal val isChannelReadCompleted: kotlinx.atomicfu.AtomicBoolean = atomic(false)
 
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
