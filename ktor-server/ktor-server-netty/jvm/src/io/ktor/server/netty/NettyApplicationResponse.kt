@@ -20,7 +20,10 @@ public abstract class NettyApplicationResponse(
     protected val userContext: CoroutineContext
 ) : BaseApplicationResponse(call) {
 
-    internal val responseFlag: ChannelPromise = context.newPromise()
+    /**
+     * Promise set success when the response is ready to read or failed if a response is cancelled
+     */
+    internal val responseReady: ChannelPromise = context.newPromise()
 
     public lateinit var responseMessage: Any
 
@@ -55,7 +58,7 @@ public abstract class NettyApplicationResponse(
             else -> ByteReadChannel(bytes)
         }
         responseMessage = message
-        responseFlag.setSuccess()
+        responseReady.setSuccess()
         responseMessageSent = true
     }
 
@@ -89,7 +92,7 @@ public abstract class NettyApplicationResponse(
                 responseMessage(chunked, last = false)
             }
         }
-        responseFlag.setSuccess()
+        responseReady.setSuccess()
         responseMessageSent = true
     }
 
@@ -112,7 +115,7 @@ public abstract class NettyApplicationResponse(
     public fun cancel() {
         if (!responseMessageSent) {
             responseChannel = ByteReadChannel.Empty
-            responseFlag.setFailure(java.util.concurrent.CancellationException())
+            responseReady.setFailure(java.util.concurrent.CancellationException("Response was cancelled"))
             responseMessageSent = true
         }
     }

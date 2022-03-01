@@ -5,7 +5,6 @@
 package io.ktor.server.netty.http1
 
 import io.ktor.server.application.*
-import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.utils.io.*
 import io.netty.buffer.*
@@ -42,22 +41,22 @@ internal class NettyHttp1ApplicationCall(
         putResponseAttribute()
     }
 
-    override fun transform(buf: ByteBuf, last: Boolean): Any {
-        if (isRaw) {
-            return super.transform(buf, last)
+    override fun transform(buf: ByteBuf, isLastContent: Boolean): Any {
+        if (isByteBufferContent) {
+            return super.transform(buf, isLastContent)
         }
         return DefaultHttpContent(buf)
     }
 
     override fun endOfStream(lastTransformed: Boolean): Any? {
-        if (isRaw) {
+        if (isByteBufferContent) {
             return super.endOfStream(lastTransformed)
         }
         return LastHttpContent.EMPTY_LAST_CONTENT
     }
 
     override fun upgrade(dst: ChannelHandlerContext) {
-        if (isRaw) {
+        if (isByteBufferContent) {
             return super.upgrade(dst)
         }
         dst.pipeline().apply {
@@ -65,5 +64,5 @@ internal class NettyHttp1ApplicationCall(
         }
     }
 
-    override fun isContextCloseRequired(): Boolean = !isRaw
+    override fun isContextCloseRequired(): Boolean = !isByteBufferContent
 }

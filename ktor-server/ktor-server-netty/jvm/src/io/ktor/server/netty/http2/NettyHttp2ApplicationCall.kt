@@ -5,7 +5,6 @@
 package io.ktor.server.netty.http2
 
 import io.ktor.server.application.*
-import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.netty.buffer.*
 import io.netty.channel.*
@@ -28,22 +27,22 @@ internal class NettyHttp2ApplicationCall(
         putResponseAttribute()
     }
 
-    override fun transform(buf: ByteBuf, last: Boolean): Any {
-        if (isRaw) {
-            return super.transform(buf, last)
+    override fun transform(buf: ByteBuf, isLastContent: Boolean): Any {
+        if (isByteBufferContent) {
+            return super.transform(buf, isLastContent)
         }
-        return DefaultHttp2DataFrame(buf, last)
+        return DefaultHttp2DataFrame(buf, isLastContent)
     }
 
     override fun endOfStream(lastTransformed: Boolean): Any? {
-        if (isRaw) {
+        if (isByteBufferContent) {
             return super.endOfStream(lastTransformed)
         }
         return if (lastTransformed) null else DefaultHttp2DataFrame(true)
     }
 
     override fun upgrade(dst: ChannelHandlerContext) {
-        if (isRaw) {
+        if (isByteBufferContent) {
             return super.upgrade(dst)
         }
         throw IllegalStateException("HTTP/2 doesn't support upgrade")

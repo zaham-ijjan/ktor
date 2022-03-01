@@ -43,15 +43,24 @@ internal class NettyHttp1Handler(
 
     private var skipEmpty = false
 
-    lateinit var responseWriter: NettyResponsePipeline
+    private lateinit var responseWriter: NettyHttpResponsePipeline
 
     private var currentRequest: ByteReadChannel? = null
 
-    private var writersCount: AtomicLong = AtomicLong()
+    /**
+     *  Represents current number of processing requests
+     */
+    internal val activeRequests: AtomicLong = atomic(0L)
 
-    private var lastContentFlag: AtomicBoolean = AtomicBoolean(false)
+    /**
+     * True if current request's last http content is read, false otherwise.
+     */
+    internal val isCurrentRequestFullyRead: AtomicBoolean = atomic(false)
 
-    private val isReadComplete: AtomicBoolean = AtomicBoolean(false)
+    /**
+     * True if [channelReadComplete] was invoked for the current request, false otherwise
+     */
+    internal val isChannelReadCompleted: AtomicBoolean = atomic(false)
 
     private lateinit var myInProgress: WeakReference<AtomicLong>
 
@@ -63,18 +72,15 @@ internal class NettyHttp1Handler(
         myInProgress = WeakReference(p)
         inProgressArray[myConnectionNumber] = p
 
-        val requestBodyHandler = RequestBodyHandler(context)
-        responseWriter = NettyResponsePipeline(
+        responseWriter = NettyHttpResponsePipeline(
             context,
+            this,
             coroutineContext,
-            writersCount,
-            lastContentFlag,
-            myInProgress,
-            isReadComplete
+            myInProgress
         )
 
         context.pipeline().apply {
-            addLast(requestBodyHandler)
+            addLast(RequestBodyHandler(context))
             addLast(callEventGroup, NettyApplicationCallHandler(userContext, enginePipeline, environment.log))
         }
         context.fireChannelActive()
@@ -82,18 +88,15 @@ internal class NettyHttp1Handler(
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         if (message is LastHttpContent) {
-            lastContentFlag.set(true)
+            isCurrentRequestFullyRead.compareAndSet(expect = false, update = true)
         }
 
         if (message is HttpRequest) {
-            requests.incrementAndGet()
-            myInProgress.get()?.incrementAndGet()
-
             if (message !is LastHttpContent) {
-                lastContentFlag.set(false)
+                isCurrentRequestFullyRead.compareAndSet(expect = true, update = false)
             }
-            isReadComplete.set(false)
-            writersCount.incrementAndGet()
+            isChannelReadCompleted.compareAndSet(expect = true, update = false)
+            activeRequests.incrementAndGet()
 
             handleRequest(context, message)
         } else if (message is LastHttpContent && !message.content().isReadable && skipEmpty) {
@@ -123,8 +126,8 @@ internal class NettyHttp1Handler(
     override fun channelReadComplete(context: ChannelHandlerContext?) {
         channelReadComplete.incrementAndGet()
 
-        isReadComplete.set(true)
-        responseWriter.markReadingStopped()
+        isChannelReadCompleted.compareAndSet(expect = false, update = true)
+        responseWriter.flushIfNeeded()
         super.channelReadComplete(context)
     }
 

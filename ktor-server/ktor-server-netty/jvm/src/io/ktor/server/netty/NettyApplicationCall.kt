@@ -23,18 +23,18 @@ public abstract class NettyApplicationCall(
     public abstract override val request: NettyApplicationRequest
     @OptIn(InternalAPI::class)
     public abstract override val response: NettyApplicationResponse
-    @OptIn(InternalAPI::class)
-    public lateinit var previousCallFinished: ChannelPromise
-    @OptIn(InternalAPI::class)
-    public lateinit var callFinished: ChannelPromise
+
+    internal lateinit var previousCallFinished: ChannelPromise
+
+    internal lateinit var callFinished: ChannelPromise
 
     public val responseWriteJob: Job = Job()
 
     private val messageReleased = atomic(false)
 
-    internal var isRaw = false
+    internal var isByteBufferContent = false
 
-    internal open fun transform(buf: ByteBuf, last: Boolean): Any {
+    internal open fun transform(buf: ByteBuf, isLastContent: Boolean): Any {
         return buf
     }
 
@@ -57,6 +57,7 @@ public abstract class NettyApplicationCall(
             @OptIn(InternalAPI::class)
             response.ensureResponseSent()
         } catch (cause: Throwable) {
+            callFinished.setFailure(cause)
             finishComplete()
             throw cause
         }
