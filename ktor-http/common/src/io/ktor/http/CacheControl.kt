@@ -64,6 +64,22 @@ public sealed class CacheControl(public val visibility: Visibility?) {
         }
     }
 
+    public class Immutable(visibility: Visibility?) : CacheControl(visibility) {
+        override fun toString(): String = if (visibility == null) {
+            "immutable"
+        } else {
+            "immutable, ${visibility.headerValue}"
+        }
+
+        override fun equals(other: Any?): Boolean {
+            return other is Immutable && other.visibility == visibility
+        }
+
+        override fun hashCode(): Int {
+            return visibility.hashCode()
+        }
+    }
+
     /**
      * Represents a cache control value with the specified max ages and re-validation strategies
      * @property maxAgeSeconds max-age in seconds

@@ -22,6 +22,7 @@ import io.ktor.http.*
  *
  * A no-cache directive is always placed first.
  * A no-store directive is always placed after no-cache, otherwise it's placed first.
+ * An immutable directive is always placed after no-store, otherwise it's placed first
  * A max-age directive is always the last.
  *
  * Revalidation directives are collected as well.
@@ -39,6 +40,7 @@ internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl
 
     val noCacheDirective = firstOrNull { it is CacheControl.NoCache } as CacheControl.NoCache?
     val noStoreDirective = firstOrNull { it is CacheControl.NoStore } as CacheControl.NoStore?
+    val immutableDirective = firstOrNull { it is CacheControl.Immutable } as CacheControl.Immutable?
 
     val maxAgeDirectives = filterIsInstance<CacheControl.MaxAge>()
     val minMaxAge = maxAgeDirectives.minByOrNull { it.maxAgeSeconds }?.maxAgeSeconds
@@ -49,6 +51,7 @@ internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl
     return mutableListOf<CacheControl>().apply {
         noCacheDirective?.let { add(CacheControl.NoCache(null)) }
         noStoreDirective?.let { add(CacheControl.NoStore(null)) }
+        immutableDirective?.let { add(CacheControl.Immutable(null)) }
 
         if (maxAgeDirectives.isNotEmpty()) {
             add(
@@ -64,6 +67,7 @@ internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl
             when {
                 noCacheDirective != null -> set(0, CacheControl.NoCache(visibility))
                 noStoreDirective != null -> set(0, CacheControl.NoStore(visibility))
+                immutableDirective != null -> set(0, CacheControl.Immutable(visibility))
             }
         }
     }

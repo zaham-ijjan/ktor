@@ -9,6 +9,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
+import io.ktor.server.engine.*
 import io.ktor.server.plugins.cachingheaders.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -63,12 +64,29 @@ class CachingHeadersTest {
     )
 
     @Test
+    fun testMaxAgeAndImmutable(): Unit = test(
+        configure = {
+            install(CachingHeaders) {
+                options { CachingOptions(CacheControl.Immutable(CacheControl.Visibility.Private)) }
+                options { CachingOptions(CacheControl.MaxAge(15)) }
+            }
+        },
+        test = { response ->
+            assertEquals(
+                "no-cache, immutable, max-age=15, private",
+                response.headers[HttpHeaders.CacheControl]
+            )
+        }
+    )
+
+    @Test
     fun testSubrouteInstall() = testApplication {
         application {
             routing {
                 route("/1") {
                     install(CachingHeaders) {
                         options { CachingOptions(CacheControl.NoStore(CacheControl.Visibility.Private)) }
+                        options { CachingOptions(CacheControl.Immutable(CacheControl.Visibility.Private)) }
                         options { CachingOptions(CacheControl.MaxAge(15)) }
                     }
                     get {
@@ -87,7 +105,7 @@ class CachingHeadersTest {
 
         client.get("/1").let {
             assertEquals(
-                "no-cache, no-store, max-age=15, private",
+                "no-cache, no-store, immutable, max-age=15, private",
                 it.headers[HttpHeaders.CacheControl]
             )
         }
