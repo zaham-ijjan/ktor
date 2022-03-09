@@ -7,14 +7,15 @@ package io.ktor.server.plugins.cachingheaders
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
-import io.ktor.websocket.*
 
 /**
  * A configuration for the [CachingHeaders] plugin
  */
 public class CachingHeadersConfig {
     internal val optionsProviders = mutableListOf<(OutgoingContent) -> CachingOptions?>()
-    internal val customDirectives = mutableListOf<(List<CacheControl>) -> CacheControl.CustomCacheControlDirective?>()
+    @PublishedApi
+    internal val customDirectives: MutableList<(List<CacheControl>) -> CacheControl.CustomCacheControlDirective?> =
+        mutableListOf()
 
     init {
         optionsProviders.add { content -> content.caching }
@@ -30,20 +31,25 @@ public class CachingHeadersConfig {
     /**
      * Registers custom cache control directive
      */
-    public fun <T: CacheControl.CustomCacheControlDirective> registerDirective(
-        getDirectiveFromHeaders: (List<CacheControl>) -> T?
+    public inline fun <reified T: CacheControl.CustomCacheControlDirective> registerDirective(
+        crossinline mergeDirectives: (List<T>) -> T?
     ) {
-        customDirectives.add(getDirectiveFromHeaders)
+        customDirectives.add { directives ->
+            val selectedDirectives = directives.filterIsInstance<T>().toList()
+            mergeDirectives.invoke(selectedDirectives)
+        }
     }
 
+    /**
+     *
+     */
     public inline fun <reified T : CacheControl.CustomCacheControlDirective> registerDirectiveWithoutParameters(
-        crossinline directiveFactory: () -> T
-    ): Unit = registerDirective { cacheControls ->
-        val foundDirective = cacheControls.firstOrNull { it is T } as T?
-        foundDirective?.let {
-            return@registerDirective directiveFactory.invoke()
+        crossinline defaultDirectiveFactory: () -> T
+    ): Unit = registerDirective { directives: List<T> ->
+        val foundDirective = directives.firstOrNull()
+        return@registerDirective foundDirective?.let {
+            defaultDirectiveFactory.invoke()
         }
-        return@registerDirective null
     }
 }
 

@@ -137,5 +137,7 @@ public sealed class CacheControl(public open val visibility: Visibility?) {
     /**
      *
      */
-    public open class CustomCacheControlDirective(public override var visibility: Visibility?) : CacheControl(visibility)
+    public abstract class CustomCacheControlDirective(
+        override var visibility: Visibility?
+    ) : CacheControl(visibility)
 }

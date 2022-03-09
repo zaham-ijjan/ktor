@@ -45,6 +45,18 @@ class CacheControlMergeTest {
             listOf(MustUnderstand(Visibility.Private)),
             merge(listOf(getMustUnderstandDirective), listOf(MustUnderstand(Visibility.Private)))
         )
+        assertEquals(
+            listOf(MustUnderstand(null)),
+            merge(listOf(getMinAgeDirective), listOf(MustUnderstand(null)))
+        )
+        assertEquals(
+            listOf(MustUnderstand(Visibility.Public)),
+            merge(listOf(getMinAgeDirective), listOf(MustUnderstand(Visibility.Public)))
+        )
+        assertEquals(
+            listOf(MustUnderstand(Visibility.Private)),
+            merge(listOf(getMinAgeDirective), listOf(MustUnderstand(Visibility.Private)))
+        )
     }
 
     @Test
@@ -58,17 +70,17 @@ class CacheControlMergeTest {
             merge(Immutable(null), NoStore(null), NoCache(null))
         )
         assertEquals(
-            listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null)),
+            listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null), MinAge(null, 1)),
             merge(
-                listOf(getMustUnderstandDirective),
-                listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null))
+                listOf(getMustUnderstandDirective, getMinAgeDirective),
+                listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null), MinAge(null, 1))
             )
         )
         assertEquals(
-            listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null)),
+            listOf(NoCache(null), NoStore(null), Immutable(null), MustUnderstand(null), MinAge(null, 1)),
             merge(
-                listOf(getMustUnderstandDirective),
-                listOf(MustUnderstand(null), Immutable(null), NoStore(null), NoCache(null))
+                listOf(getMustUnderstandDirective, getMinAgeDirective),
+                listOf(MinAge(null, 1), MustUnderstand(null), Immutable(null), NoStore(null), NoCache(null))
             )
         )
     }
@@ -83,8 +95,11 @@ class CacheControlMergeTest {
         assertEquals(listOf(NoCache(Visibility.Private)), merge(NoCache(null), NoCache(Visibility.Private)))
         assertEquals(listOf(NoCache(Visibility.Private)), merge(NoCache(Visibility.Private), NoCache(null)))
         assertEquals(
-            listOf(MustUnderstand(null)),
-            merge(listOf(getMustUnderstandDirective), listOf(MustUnderstand(null), MustUnderstand(null)))
+            listOf(MustUnderstand(null), MinAge(null, 1)),
+            merge(
+                listOf(getMustUnderstandDirective, getMinAgeDirective),
+                listOf(MustUnderstand(null), MustUnderstand(null), MinAge(null, 1))
+            )
         )
         assertEquals(
             listOf(MustUnderstand(Visibility.Private)),
@@ -182,6 +197,21 @@ class CacheControlMergeTest {
                 MaxAge(1, 2, true, false, null),
                 MaxAge(2, 1, false, true, Visibility.Public),
                 MaxAge(20, 10, false, false, Visibility.Private)
+            )
+        )
+    }
+
+    @Test
+    fun testSimpleMinAgeMerge() {
+        assertEquals(
+            listOf(MinAge(Visibility.Private, 5)),
+            merge(
+                listOf(getMinAgeDirective),
+                listOf(
+                    MinAge(null, 1),
+                    MinAge(Visibility.Public, 3),
+                    MinAge(Visibility.Private, 5)
+                )
             )
         )
     }
@@ -340,6 +370,51 @@ class CacheControlMergeTest {
     }
 
     @Test
+    fun testAgeMergeWithMinAge() {
+        assertEquals(
+            listOf(
+                MinAge(null, 1),
+                MaxAge(1, 2, true, false, Visibility.Private)
+            ),
+            merge(
+                listOf(getMinAgeDirective),
+                listOf(
+                    MaxAge(1, 2, true, false, null),
+                    MinAge(Visibility.Private, 1)
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                MinAge(null, 1),
+                MaxAge(1, 2, true, false, Visibility.Private)
+            ),
+            merge(
+                listOf(getMinAgeDirective),
+                listOf(
+                    MaxAge(1, 2, true, false, Visibility.Public),
+                    MinAge(Visibility.Private, 1)
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                MinAge(null, 1),
+                MaxAge(1, 2, true, false, Visibility.Public)
+            ),
+            merge(
+                listOf(getMinAgeDirective),
+                listOf(
+                    MaxAge(1, 2, true, false, Visibility.Public),
+                    MinAge(null, 1)
+                )
+            )
+        )
+    }
+
+    @Test
     fun testAgeMergeWithAllDirectives() {
         assertEquals(
             listOf(
@@ -459,11 +534,18 @@ class CacheControlMergeTest {
 
     private val getMustUnderstandDirective: (List<CacheControl>) -> CustomCacheControlDirective? =
         lambda@{ cacheHeaders ->
-            val foundDirective = cacheHeaders.firstOrNull { it is MustUnderstand } as MustUnderstand?
-            foundDirective?.let {
-                return@lambda MustUnderstand(null)
+            val foundMustUnderstand = cacheHeaders.firstOrNull { it is MustUnderstand } as MustUnderstand?
+            return@lambda foundMustUnderstand?.let {
+                MustUnderstand(null)
             }
-            return@lambda null
+        }
+
+    private val getMinAgeDirective: (List<CacheControl>) -> CustomCacheControlDirective? =
+        lambda@{ cacheHeaders ->
+            val foundMinAgeDirectives = cacheHeaders.filterIsInstance<MinAge>()
+            return@lambda foundMinAgeDirectives.maxByOrNull { it.minAgeSeconds }?.minAgeSeconds?.let {
+                MinAge(null, it)
+            }
         }
 
     private class MustUnderstand(visibility: Visibility?) : CustomCacheControlDirective(visibility) {
@@ -479,6 +561,25 @@ class CacheControlMergeTest {
 
         override fun hashCode(): Int {
             return visibility.hashCode()
+        }
+    }
+
+    private class MinAge(
+        visibility: Visibility?,
+        val minAgeSeconds: Int
+    ) : CustomCacheControlDirective(visibility) {
+        override fun toString(): String = if (visibility == null) {
+            "custom-min-age=$minAgeSeconds"
+        } else {
+            "custom-min-age=$minAgeSeconds , ${visibility!!.headerValue}"
+        }
+
+        override fun equals(other: Any?): Boolean {
+            return other is MinAge && other.visibility == visibility && other.minAgeSeconds == minAgeSeconds
+        }
+
+        override fun hashCode(): Int {
+            return minAgeSeconds
         }
     }
 }

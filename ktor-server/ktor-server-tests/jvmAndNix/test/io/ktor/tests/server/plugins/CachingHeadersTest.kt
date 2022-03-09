@@ -80,6 +80,23 @@ class CachingHeadersTest {
     )
 
     @Test
+    fun testCustomDirective(): Unit = test(
+        configure = {
+            install(CachingHeaders) {
+                registerDirectiveWithoutParameters { MustUnderstand(null) }
+                options { CachingOptions(CacheControl.NoStore(CacheControl.Visibility.Private)) }
+                options { CachingOptions(MustUnderstand(CacheControl.Visibility.Private)) }
+            }
+        },
+        test = { response ->
+            assertEquals(
+                "no-cache, private, no-store, must-understand",
+                response.headers[HttpHeaders.CacheControl]
+            )
+        }
+    )
+
+    @Test
     fun testSubrouteInstall() = testApplication {
         application {
             routing {
@@ -134,6 +151,22 @@ class CachingHeadersTest {
             assertTrue(it.status.isSuccess())
             assertEquals("test", it.bodyAsText().trim())
             test(it)
+        }
+    }
+
+    private class MustUnderstand(visibility: Visibility?) : CacheControl.CustomCacheControlDirective(visibility) {
+        override fun toString(): String = if (visibility == null) {
+            "must-understand"
+        } else {
+            "must-understand, ${visibility!!.headerValue}"
+        }
+
+        override fun equals(other: Any?): Boolean {
+            return other is MustUnderstand && other.visibility == visibility
+        }
+
+        override fun hashCode(): Int {
+            return visibility.hashCode()
         }
     }
 }
