@@ -7,12 +7,14 @@ package io.ktor.server.plugins.cachingheaders
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
+import io.ktor.websocket.*
 
 /**
  * A configuration for the [CachingHeaders] plugin
  */
 public class CachingHeadersConfig {
     internal val optionsProviders = mutableListOf<(OutgoingContent) -> CachingOptions?>()
+    internal val customDirectives = mutableListOf<(List<CacheControl>) -> CacheControl.CustomCacheControlDirective?>()
 
     init {
         optionsProviders.add { content -> content.caching }
@@ -23,6 +25,25 @@ public class CachingHeadersConfig {
      */
     public fun options(provider: (OutgoingContent) -> CachingOptions?) {
         optionsProviders.add(provider)
+    }
+
+    /**
+     * Registers custom cache control directive
+     */
+    public fun <T: CacheControl.CustomCacheControlDirective> registerDirective(
+        getDirectiveFromHeaders: (List<CacheControl>) -> T?
+    ) {
+        customDirectives.add(getDirectiveFromHeaders)
+    }
+
+    public inline fun <reified T : CacheControl.CustomCacheControlDirective> registerDirectiveWithoutParameters(
+        crossinline directiveFactory: () -> T
+    ): Unit = registerDirective { cacheControls ->
+        val foundDirective = cacheControls.firstOrNull { it is T } as T?
+        foundDirective?.let {
+            return@registerDirective directiveFactory.invoke()
+        }
+        return@registerDirective null
     }
 }
 
@@ -35,6 +56,7 @@ public val CachingHeaders: RouteScopedPlugin<CachingHeadersConfig> = createRoute
     ::CachingHeadersConfig
 ) {
     val optionsProviders = pluginConfig.optionsProviders.toList()
+    val customDirectives = pluginConfig.customDirectives.toList()
 
     fun optionsFor(content: OutgoingContent): List<CachingOptions> {
         return optionsProviders.mapNotNullTo(ArrayList(optionsProviders.size)) { it(content) }
@@ -46,7 +68,7 @@ public val CachingHeaders: RouteScopedPlugin<CachingHeadersConfig> = createRoute
 
         val headers = Headers.build {
             options.mapNotNull { it.cacheControl }
-                .mergeCacheControlDirectives()
+                .mergeCacheControlDirectives(customDirectives)
                 .ifEmpty { null }?.let { directives ->
                     append(HttpHeaders.CacheControl, directives.joinToString(separator = ", "))
                 }

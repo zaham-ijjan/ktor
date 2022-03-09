@@ -9,12 +9,12 @@ package io.ktor.http
  *
  * @param visibility specifies an optional visibility such as private or public
  */
-public sealed class CacheControl(public val visibility: Visibility?) {
+public sealed class CacheControl(public open val visibility: Visibility?) {
 
     /**
      * Controls caching by proxies
      */
-    public enum class Visibility(internal val headerValue: String) {
+    public enum class Visibility(public val headerValue: String) {
         /**
          * Specifies that the response is cacheable by clients and shared (proxy) caches.
          */
@@ -133,4 +133,9 @@ public sealed class CacheControl(public val visibility: Visibility?) {
             return result
         }
     }
+
+    /**
+     *
+     */
+    public open class CustomCacheControlDirective(public override var visibility: Visibility?) : CacheControl(visibility)
 }

@@ -29,7 +29,9 @@ import io.ktor.http.*
  * Currently, revalidation directives are tied to max age by-design.
  * This is not fair according to RFC so will be changed in the future.
  */
-internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl> {
+internal fun List<CacheControl>.mergeCacheControlDirectives(
+    customDirectiveProviders: List<(List<CacheControl>) -> CacheControl.CustomCacheControlDirective?> = listOf()
+): List<CacheControl> {
     if (size < 2) return this
 
     val visibility = when {
@@ -48,10 +50,17 @@ internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl
     val mustRevalidate = maxAgeDirectives.any { it.mustRevalidate }
     val proxyRevalidate = maxAgeDirectives.any { it.proxyRevalidate }
 
+    val customDirectives = customDirectiveProviders.mapNotNull { it.invoke(this) }
+
     return mutableListOf<CacheControl>().apply {
         noCacheDirective?.let { add(CacheControl.NoCache(null)) }
         noStoreDirective?.let { add(CacheControl.NoStore(null)) }
         immutableDirective?.let { add(CacheControl.Immutable(null)) }
+
+        customDirectives.forEach {
+            it.visibility = null
+            add(it)
+        }
 
         if (maxAgeDirectives.isNotEmpty()) {
             add(
@@ -68,6 +77,10 @@ internal fun List<CacheControl>.mergeCacheControlDirectives(): List<CacheControl
                 noCacheDirective != null -> set(0, CacheControl.NoCache(visibility))
                 noStoreDirective != null -> set(0, CacheControl.NoStore(visibility))
                 immutableDirective != null -> set(0, CacheControl.Immutable(visibility))
+                customDirectives.isNotEmpty() -> {
+                    customDirectives[0].visibility = visibility
+                    set(0, customDirectives[0])
+                }
             }
         }
     }
