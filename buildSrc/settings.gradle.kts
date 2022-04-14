@@ -4,6 +4,9 @@
 pluginManagement {
     val build_snapshot_train: String? by settings
     repositories {
+        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+        //maven("F:\\JetBrains\\kotlin\\build\\repo")
+
         val cacheRedirectorEnabled = System.getenv("CACHE_REDIRECTOR_ENABLED")?.toBoolean() == true
         if (cacheRedirectorEnabled) {
             println("Redirecting repositories for buildSrc buildscript")

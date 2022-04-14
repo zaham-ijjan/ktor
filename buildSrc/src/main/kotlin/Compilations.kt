@@ -11,6 +11,6 @@ fun KotlinCompilation<KotlinCommonOptions>.configureCompilation() {
 //            allWarningsAsErrors = true
         }
 
-        freeCompilerArgs += "-Xopt-in=kotlin.RequiresOptIn"
+        freeCompilerArgs += listOf("-Xopt-in=kotlin.RequiresOptIn", "-Xuse-fir")
     }
 }

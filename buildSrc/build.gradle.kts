@@ -13,6 +13,9 @@ val cacheRedirectorEnabled = System.getenv("CACHE_REDIRECTOR_ENABLED")?.toBoolea
 val buildSnapshotTrain = properties["build_snapshot_train"]?.toString()?.toBoolean() == true
 
 repositories {
+    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+    //maven("F:\\JetBrains\\kotlin\\build\\repo")
+
     if (cacheRedirectorEnabled) {
         maven("https://cache-redirector.jetbrains.com/plugins.gradle.org/m2")
     }

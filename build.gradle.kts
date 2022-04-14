@@ -3,6 +3,7 @@
  */
 
 import org.jetbrains.dokka.gradle.*
+import org.jetbrains.kotlin.gradle.tasks.*
 import org.jetbrains.kotlin.konan.target.*
 
 buildscript {
@@ -25,6 +26,8 @@ buildscript {
             )
         }
         repositories {
+            maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+            //maven("F:\\JetBrains\\kotlin\\build\\repo")
             mavenLocal()
             maven(url = "https://oss.sonatype.org/content/repositories/snapshots")
         }
@@ -43,6 +46,8 @@ buildscript {
     extra["native_targets_enabled"] = rootProject.properties["disable_native_targets"] == null
 
     repositories {
+        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+        //maven("F:\\JetBrains\\kotlin\\build\\repo")
         mavenLocal()
         mavenCentral()
         google()
@@ -112,6 +117,8 @@ allprojects {
     setupTrainForSubproject()
 
     repositories {
+        maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+        //maven("F:\\JetBrains\\kotlin\\build\\repo")
         mavenLocal()
         mavenCentral()
         maven(url = "https://maven.pkg.jetbrains.space/public/p/kotlinx-html/maven")
@@ -211,4 +218,10 @@ if (docs != null) {
 rootProject.plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin> {
     val nodeM1Version = "16.13.1"
     rootProject.the<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootExtension>().nodeVersion = nodeM1Version
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.dsl.KotlinJvmCompile> {
+    kotlinOptions {
+        freeCompilerArgs += listOf("-Xuse-fir=true")
+    }
 }
