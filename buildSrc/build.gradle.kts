@@ -29,7 +29,13 @@ sourceSets.main {
 }
 
 dependencies {
-    implementation(kotlin("gradle-plugin", libs.versions.kotlin.version.get()))
+    if (buildSnapshotTrain) {
+        extra["kotlin_version"] = rootProject.properties["kotlin_snapshot_version"]
+        val kotlin_version: String? by extra
+        implementation(kotlin("gradle-plugin", kotlin_version))
+    } else {
+        implementation(kotlin("gradle-plugin", libs.versions.kotlin.version.get()))
+    }
     implementation(kotlin("serialization", libs.versions.kotlin.version.get()))
 
     val ktlint_version = libs.versions.ktlint.version.get()
