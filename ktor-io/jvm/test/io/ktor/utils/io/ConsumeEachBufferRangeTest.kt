@@ -21,7 +21,7 @@ class ConsumeEachBufferRangeTest {
     val timeout = CoroutinesTimeout(10000, cancelOnTimeout = true)
 
     @Test
-    @OptIn
+    @OptIn(InternalCoroutinesApi::class)
     fun test() {
         runBlocking {
             launch {
