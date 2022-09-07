@@ -18,7 +18,7 @@ import kotlinx.html.*
 import java.io.*
 
 /**
- * Create a get endpoint with [SwaggerUI] rendered from open api file at [filename].
+ * Create a get endpoint with [SwaggerUI] ath [path] rendered from open api file at [filename].
  */
 public fun Routing.swaggerUI(path: String, filename: String) {
     route(path) {
@@ -66,13 +66,13 @@ window.onload = function() {
 }
 
 /**
- * Create a get endpoint with documentation rendered from openApi file at [filename].
+ * Create a get endpoint at [path] with documentation rendered from openApi file at [filename].
  *
  * The documentation is generated using [StaticHtml2Codegen] by default. It can be customized using config in [block].
  * See [OpenAPIConfig] for more details.
  */
 public fun Routing.openApi(path: String, filename: String, block: OpenAPIConfig.() -> Unit = {}) {
-    val config = OpenAPIConfig().apply(block)
+    val config = OpenAPIConfig()
     with(config) {
         val swagger = parser.readContents(File(filename).readText(), null, options)
 
@@ -81,6 +81,8 @@ public fun Routing.openApi(path: String, filename: String, block: OpenAPIConfig.
             opts(ClientOpts())
             openAPI(swagger.openAPI)
         }
+
+        block(this)
 
         generator.opts(opts)
         generator.generate()
