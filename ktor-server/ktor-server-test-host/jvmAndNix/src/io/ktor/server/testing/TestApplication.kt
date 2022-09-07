@@ -140,7 +140,6 @@ public open class TestApplicationBuilder {
         built = true
         createTestEnvironment {
             modules.addAll(this@TestApplicationBuilder.applicationModules)
-            developmentMode = true
             val oldConfig = config
             this@TestApplicationBuilder.environmentBuilder(this)
             if (config == oldConfig) { // config was not set by user. load the default one
