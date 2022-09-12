@@ -7,7 +7,9 @@ import java.util.Properties
 pluginManagement {
     val build_snapshot_train: String? by settings
     repositories {
+        gradlePluginPortal()
         maven("https://plugins.gradle.org/m2")
+        maven("https://cache-redirector.jetbrains.com/plugins.gradle.org/m2")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
         mavenCentral()
         if (build_snapshot_train?.toBoolean() == true) {
