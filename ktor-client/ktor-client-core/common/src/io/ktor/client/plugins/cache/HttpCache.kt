@@ -185,10 +185,11 @@ public class HttpCache private constructor(
     private suspend fun cacheResponse(response: HttpResponse): HttpResponse {
         val request = response.call.request
         val responseCacheControl: List<HeaderValue> = response.cacheControl()
+        val requestCacheControl: List<HeaderValue> = request.cacheControl()
 
         val storage = if (CacheControl.PRIVATE in responseCacheControl) privateStorage else publicStorage
 
-        if (CacheControl.NO_STORE in responseCacheControl) {
+        if (CacheControl.NO_STORE in responseCacheControl || CacheControl.NO_STORE in requestCacheControl) {
             return response
         }
 
